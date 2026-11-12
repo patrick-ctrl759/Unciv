@@ -60,3 +60,9 @@ jobs:
             echo "::error::AndroidLauncher class missing from APK dex - Kotlin sources in :android module were not compiled!"
             exit 1
           fi
+                - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Unciv-Modificado
+          path: android/build/outputs/apk/debug/*.apk
+          
