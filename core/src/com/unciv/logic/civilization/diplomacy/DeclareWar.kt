@@ -28,6 +28,9 @@ object DeclareWar {
         val otherCiv = diplomacyManager.otherCiv
         val otherCivDiplomacy = diplomacyManager.otherCivDiplomacy()
 
+        if (civInfo.isVassalOf(otherCiv)) return
+        if (otherCiv.isVassalOf(civInfo)) otherCiv.vassalOfCivId = null
+
         if (otherCiv.isCityState && declareWarReason.warType == WarType.DirectWar)
             handleCityStateDirectAttack(diplomacyManager)
 

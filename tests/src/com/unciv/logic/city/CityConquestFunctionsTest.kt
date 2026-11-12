@@ -274,4 +274,53 @@ class CityConquestFunctionsTest {
         // then
         assertFalse(defenderCity.isPuppet)
     }
+
+    @Test
+    fun `total annexation merges captured cities into the capital`() {
+        val capital = testGame.addCity(attackerCiv, testGame.getTile(-1, 0), initialPopulation = 6)
+        val previouslyCapturedCity = testGame.addCity(defenderCiv, testGame.getTile(1, 0), initialPopulation = 4)
+        val transferredTile = testGame.getTile(2, 0)
+        previouslyCapturedCity.expansion.takeOwnership(transferredTile)
+        val building = testGame.createBuilding()
+        previouslyCapturedCity.cityConstructions.addBuilding(building.name)
+        previouslyCapturedCity.moveToCiv(attackerCiv)
+
+        cityConquestFunctions.annexEntireNation(attackerCiv)
+
+        assertEquals(listOf(capital), attackerCiv.cities)
+        assertEquals(17, capital.population.population)
+        assertTrue(capital.cityConstructions.containsBuildingOrEquivalent(building.name))
+        assertEquals(capital, transferredTile.getCity())
+        assertEquals(capital, previouslyCapturedCity.getCenterTile().getCity())
+        assertEquals(capital, defenderCity.getCenterTile().getCity())
+        assertFalse(attackerCiv.cities.contains(previouslyCapturedCity))
+        assertFalse(attackerCiv.cities.contains(defenderCity))
+    }
+
+    @Test
+    fun `vassalization restores captured cities and prevents war with the suzerain`() {
+        testGame.addCity(attackerCiv, testGame.getTile(-1, 0), initialPopulation = 6)
+        val previouslyCapturedCity = testGame.addCity(defenderCiv, testGame.getTile(1, 0), initialPopulation = 4)
+        previouslyCapturedCity.moveToCiv(attackerCiv)
+
+        cityConquestFunctions.vassalizeNation(attackerCiv)
+
+        assertSame(defenderCiv, previouslyCapturedCity.civ)
+        assertTrue(defenderCiv.cities.contains(previouslyCapturedCity))
+        assertTrue(defenderCiv.isVassalOf(attackerCiv))
+        assertFalse(defenderCiv.getDiplomacyManager(attackerCiv)!!.canDeclareWar())
+        assertFalse(attackerCiv.getDiplomacyManager(defenderCiv)!!.canDeclareWar())
+    }
+
+    @Test
+    fun `vassalization keeps the suzerain capital even when it was captured from the vassal`() {
+        val capturedCapital = testGame.addCity(defenderCiv, testGame.getTile(1, 0), initialPopulation = 4)
+        capturedCapital.moveToCiv(attackerCiv)
+
+        cityConquestFunctions.vassalizeNation(attackerCiv)
+
+        assertSame(capturedCapital, attackerCiv.getCapital())
+        assertTrue(attackerCiv.cities.contains(capturedCapital))
+        assertTrue(defenderCiv.isVassalOf(attackerCiv))
+    }
 }

@@ -7,6 +7,7 @@ import com.unciv.Constants
 import com.unciv.UncivGame
 import com.unciv.logic.battle.BattleUnitCapture
 import com.unciv.logic.city.City
+import com.unciv.logic.city.managers.CityConquestFunctions
 import com.unciv.logic.civilization.AlertType
 import com.unciv.logic.civilization.Civilization
 import com.unciv.logic.civilization.CivilopediaAction
@@ -200,8 +201,30 @@ class AlertPopup(
 
     private fun addCityConquered() {
         val city = getCity(popupAlert.value)
-        addQuestionAboutTheCity(city.name)
         val conqueringCiv = gameInfo.getCurrentPlayerCivilization()
+
+        if (city.civ != conqueringCiv
+            && city.civ.cities.size == 1
+            && city.foundingCivObject == city.civ
+            && city.civ.isMajorCiv
+            && !city.civ.isHuman()
+        ) {
+            addGoodSizedLabel("The last city of [${city.civ.civName}] has fallen.").row()
+            addGoodSizedLabel("Choose the fate of [${city.civ.civName}].").row()
+            addSeparator()
+            val conquest = CityConquestFunctions(city)
+            addCloseButton("Annex Entire Nation", KeyboardBinding.Confirm) {
+                conquest.annexEntireNation(conqueringCiv)
+            }.row()
+            addGoodSizedLabel("Cities you have captured from it, along with their population, buildings, and territory, will be merged into your capital.").row()
+            addCloseButton("Make [nation] a Vassal".fillPlaceholders(city.civ.civName), KeyboardBinding.Cancel) {
+                conquest.vassalizeNation(conqueringCiv)
+            }.row()
+            addGoodSizedLabel("It keeps its remaining cities and is controlled by its AI, but cannot declare war on you. Your capital remains yours.")
+            return
+        }
+
+        addQuestionAboutTheCity(city.name)
 
         if (city.foundingCivObject != null
                 && city.civ != city.foundingCivObject // can't liberate if the city actually belongs to those guys

@@ -193,6 +193,7 @@ class Civilization : IsPartOfGameInfoSerialization {
     val popupAlerts = ArrayList<PopupAlert>()
     /**Serialization field for [allyCiv]. Is equivalent to ``allyCiv.civName``*/
     private var allyCivName: String? = null
+    var vassalOfCivId: String? = null
     var naturalWonders = ArrayList<String>()
 
     var notifications = ArrayList<Notification>()
@@ -340,6 +341,7 @@ class Civilization : IsPartOfGameInfoSerialization {
         toReturn.espionageManager = espionageManager.clone()
         toReturn.victoryManager = victoryManager.clone()
         toReturn.allyCivName = allyCivName
+        toReturn.vassalOfCivId = vassalOfCivId
         for (diplomacyManager in diplomacy.values.map { it.clone() })
             toReturn.diplomacy[diplomacyManager.otherCivName] = diplomacyManager
         toReturn.proximity.putAll(proximity)
@@ -850,6 +852,7 @@ class Civilization : IsPartOfGameInfoSerialization {
     @Readonly fun getEra(): Era = tech.era
     @Readonly fun getEraNumber(): Int = getEra().eraNumber
     @Readonly fun isAtWarWith(otherCiv: Civilization) = diplomacyFunctions.isAtWarWith(otherCiv)
+    @Readonly fun isVassalOf(otherCiv: Civilization) = vassalOfCivId == otherCiv.civID
     @Readonly fun isAtWar() = diplomacy.values.any { it.diplomaticStatus == DiplomaticStatus.War && !it.otherCiv.isDefeated() }
     @Readonly fun getCivsAtWarWith() = diplomacy.values.filter { it.diplomaticStatus == DiplomaticStatus.War && !it.otherCiv.isDefeated() }.map { it.otherCiv }
 
@@ -1194,6 +1197,9 @@ class Civilization : IsPartOfGameInfoSerialization {
      */
     // At the moment, the "last unit down" callers do not pass a location, the city ones do - because the former isn't interesting
     fun destroy(notificationLocation: HexCoord? = null) {
+        for (vassal in gameInfo.civilizations.filter { it.isVassalOf(this) })
+            vassal.vassalOfCivId = null
+
         revealMapWhenDefeated()
         val destructionText = if (isMajorCiv) "The civilization of [$civName] has been destroyed!"
             else "The City-State of [$civName] has been destroyed!"

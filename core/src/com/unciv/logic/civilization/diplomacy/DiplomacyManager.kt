@@ -526,13 +526,15 @@ class DiplomacyManager() : IsPartOfGameInfoSerialization {
 
     @Readonly
     fun canDeclareWar() = !civInfo.isDefeated() && !otherCiv.isDefeated()
+            && !civInfo.isVassalOf(otherCiv) && !otherCiv.isVassalOf(civInfo)
             && turnsToPeaceTreaty() == 0 && diplomaticStatus != DiplomaticStatus.War
 
     fun declareWar(declareWarReason: DeclareWarReason = DeclareWarReason(WarType.DirectWar)) =
         DeclareWar.declareWar(this, declareWarReason)
 
     //Used for nuke
-    @Readonly fun canAttack() = turnsToPeaceTreaty() == 0
+    @Readonly fun canAttack() = !civInfo.isVassalOf(otherCiv) && !otherCiv.isVassalOf(civInfo)
+            && turnsToPeaceTreaty() == 0
 
     @Readonly
     fun goldPerTurn(): Int {

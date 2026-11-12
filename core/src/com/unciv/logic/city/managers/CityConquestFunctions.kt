@@ -176,6 +176,55 @@ class CityConquestFunctions(val city: City) {
         GUI.setUpdateWorldOnNextRender()
     }
 
+    fun annexEntireNation(conqueringCiv: Civilization) {
+        val conqueredCiv = city.civ
+        city.puppetCity(conqueringCiv)
+
+        val capital = conqueringCiv.getCapital() ?: return
+        val citiesToMerge = conqueringCiv.cities
+            .filter { it != capital && it.foundingCivObject == conqueredCiv }
+            .toList()
+
+        for (cityToMerge in citiesToMerge) {
+            for (building in cityToMerge.cityConstructions.getBuiltBuildings()) {
+                if (!capital.cityConstructions.containsBuildingOrEquivalent(building.name))
+                    capital.cityConstructions.addBuilding(building)
+            }
+
+            capital.population.addPopulation(cityToMerge.population.population)
+            for (tile in cityToMerge.getTiles().toList()) {
+                if (tile != cityToMerge.getCenterTile())
+                    capital.expansion.takeOwnership(tile)
+            }
+            val cityCenter = cityToMerge.getCenterTile()
+            cityToMerge.destroyCity(overrideSafeties = true)
+            capital.expansion.takeOwnership(cityCenter)
+        }
+
+        capital.reassignPopulation()
+        capital.cityStats.update()
+        conqueringCiv.cache.updateOurTiles()
+        GUI.setUpdateWorldOnNextRender()
+    }
+
+    fun vassalizeNation(conqueringCiv: Civilization) {
+        val vassalCiv = city.civ
+        val suzerainCapital = conqueringCiv.getCapital()
+        val citiesToReturn = conqueringCiv.cities
+            .filter { it != suzerainCapital && it.foundingCivObject == vassalCiv }
+            .toList()
+
+        for (cityToReturn in citiesToReturn) {
+            cityToReturn.moveToCiv(vassalCiv)
+            cityToReturn.isPuppet = false
+            cityToReturn.removeFlag(CityFlags.Resistance)
+            cityToReturn.cityStats.update()
+        }
+
+        vassalCiv.getDiplomacyManagerOrMeet(conqueringCiv).makePeace()
+        vassalCiv.vassalOfCivId = conqueringCiv.civID
+    }
+
     private fun diplomaticRepercussionsForConqueringCity(oldCiv: Civilization, conqueringCiv: Civilization) {
         val currentPopulation = city.population.population
         val percentageOfCivPopulationInThatCity = currentPopulation * 100f /
