@@ -83,6 +83,8 @@ class MapParametersTable(
         private const val VERY_LARGE_MAP_WARNING = "This is a very large map - may cause Out Of Memory crashes"
         private const val LARGE_MAP_TILES = 4000
         private const val VERY_LARGE_MAP_TILES = 16000
+        private const val MAX_RECTANGULAR_MAP_WIDTH = 100
+        private const val MAX_RECTANGULAR_MAP_HEIGHT = 80
     }
 
     // used only in map editor (forMapEditor == true)
@@ -288,12 +290,10 @@ class MapParametersTable(
         customMapHeight = UncivTextField.Integer("Height", defaultHeight)
 
         customMapWidth.onChange {
-            mapParameters.mapSize = MapSize(customMapWidth.intValue ?: 0, customMapHeight.intValue ?: 0)
-            updateRectangularWarnings()
+            updateRectangularMapSize()
         }
         customMapHeight.onChange {
-            mapParameters.mapSize = MapSize(customMapWidth.intValue ?: 0, customMapHeight.intValue ?: 0)
-            updateRectangularWarnings()
+            updateRectangularMapSize()
         }
 
         rectWarningLabel = "".toLabel(Color.RED).apply { wrap = true }
@@ -304,6 +304,17 @@ class MapParametersTable(
         rectangularSizeTable.add("{Height}:".toLabel()).grow().left()
         rectangularSizeTable.add(customMapHeight).right().row()
         rectangularSizeTable.add(rectWarningLabel).fillX().colspan(hexagonalSizeTable.columns).row()
+        updateRectangularWarnings()
+    }
+
+    private fun updateRectangularMapSize() {
+        val width = customMapWidth.intValue ?: 0
+        val height = customMapHeight.intValue ?: 0
+        val limitedWidth = width.coerceAtMost(MAX_RECTANGULAR_MAP_WIDTH)
+        val limitedHeight = height.coerceAtMost(MAX_RECTANGULAR_MAP_HEIGHT)
+        if (width != limitedWidth) customMapWidth.intValue = limitedWidth
+        if (height != limitedHeight) customMapHeight.intValue = limitedHeight
+        mapParameters.mapSize = MapSize(limitedWidth, limitedHeight)
         updateRectangularWarnings()
     }
 
@@ -319,9 +330,10 @@ class MapParametersTable(
 
         if ((mapParameters.shape == MapShape.hexagonal || mapParameters.shape == MapShape.flatEarth) && worldSizeSelectBox.selected.value == MapSize.custom)
             customWorldSizeTable.add(hexagonalSizeTable).grow().row()
-        else if (mapParameters.shape == MapShape.rectangular && worldSizeSelectBox.selected.value == MapSize.custom)
+        else if (mapParameters.shape == MapShape.rectangular && worldSizeSelectBox.selected.value == MapSize.custom) {
             customWorldSizeTable.add(rectangularSizeTable).grow().row()
-        else
+            updateRectangularMapSize()
+        } else
             mapParameters.mapSize = MapSize(worldSizeSelectBox.selected.value)
 
         sizeChangedCallback?.invoke()

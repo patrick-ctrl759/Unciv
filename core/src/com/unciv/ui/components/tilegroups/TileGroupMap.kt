@@ -211,6 +211,17 @@ class TileGroupMap<T: TileGroup>(
             .scl(1f / trueGroupSize)
     }
 
+    /** Hides detail-heavy layers while zoomed out, retaining terrain, borders and fog of war. */
+    fun setLowDetailMode(enabled: Boolean) {
+        for (mapLayer in allMapLayers) {
+            if (mapLayer !is TileMapLayer<*>) continue
+            mapLayer.isVisible = !enabled ||
+                mapLayer is TerrainMapLayer ||
+                mapLayer is BordersMapLayer ||
+                mapLayer is OverlayMapLayer
+        }
+    }
+
     override fun act(delta: Float) {
         if (shouldAct)
             super.act(delta)

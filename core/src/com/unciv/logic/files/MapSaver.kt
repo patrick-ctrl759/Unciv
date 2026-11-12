@@ -1,5 +1,6 @@
 package com.unciv.logic.files
 
+import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.files.FileHandle
 import com.unciv.UncivGame
 import com.unciv.json.json
@@ -37,6 +38,10 @@ object MapSaver {
     }
 
     fun getMaps(): Array<FileHandle> = UncivGame.Current.files.getLocalFile(mapsFolder).list()
+    fun getBundledMaps(): Array<FileHandle> {
+        val folder = Gdx.files.internal(mapsFolder)
+        return if (folder.exists()) folder.list() else emptyArray()
+    }
 
     private fun mapFromJson(json: String): TileMap = json().fromJson(TileMap::class.java, json)
 

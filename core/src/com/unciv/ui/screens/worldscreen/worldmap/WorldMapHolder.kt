@@ -53,6 +53,10 @@ class WorldMapHolder(
     internal val worldScreen: WorldScreen,
     internal val tileMap: TileMap
 ) : ZoomableScrollPane(20f, 20f) {
+    companion object {
+        private const val LOW_DETAIL_ZOOM_THRESHOLD = 0.4f
+    }
+
     internal var selectedTile: TileView? = null
     val tileGroups = HashMap<TileView, WorldTileGroup>()
 
@@ -112,6 +116,7 @@ class WorldMapHolder(
         actor = tileGroupMap
         setSize(worldScreen.stage.width, worldScreen.stage.height)
         layout() // Fit the scroll pane to the contents - otherwise, setScroll won't work!
+        updateTileDetailVisibility()
     }
 
     private fun addClickListener() {
@@ -667,6 +672,12 @@ class WorldMapHolder(
     override fun zoom(zoomScale: Float) {
         super.zoom(zoomScale)
         clampCityButtonSize()
+        updateTileDetailVisibility()
+    }
+
+    private fun updateTileDetailVisibility() {
+        if (::tileGroupMap.isInitialized)
+            tileGroupMap.setLowDetailMode(scaleX < LOW_DETAIL_ZOOM_THRESHOLD)
     }
 
     /** We don't want the city buttons becoming too large when zooming out */

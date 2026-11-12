@@ -113,7 +113,10 @@ class MapFileSelectTable(
     }
 
     private fun getUnsortedMapFilesSequence() = sequence<FileHandle> {
-        yieldAll(MapSaver.getMaps().asSequence())
+        val localMaps = MapSaver.getMaps()
+        val localMapNames = localMaps.mapTo(HashSet()) { it.name() }
+        yieldAll(localMaps.asSequence())
+        yieldAll(MapSaver.getBundledMaps().filterNot { it.name() in localMapNames }.asSequence())
         for (modFolder in RulesetCache.values.mapNotNull { it.folderLocation }) {
             val mapsFolder = modFolder.child(MapSaver.mapsFolder)
             if (mapsFolder.exists())
