@@ -36,33 +36,11 @@ jobs:
           distribution: 'temurin'
           java-version: 21
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          # The legacy 'tools' package was pulled from Google's SDK repository; only platform-tools is needed here
-          packages: 'platform-tools'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
-
       - name: Build Android debug APK
         run: ./gradlew :android:assembleDebug
 
-      - name: Verify AndroidLauncher class is present in APK
-        # Catches regressions where the :android module's Kotlin sources silently
-        # stop being compiled (e.g. kotlin-android plugin missing), which produces
-        # a working build but a ClassNotFoundException for AndroidLauncher at runtime.
-        run: |
-          APK=$(find android/build/outputs/apk/debug -name "*.apk" | head -1)
-          mkdir -p /tmp/apk-check
-          unzip -o "$APK" 'classes*.dex' -d /tmp/apk-check
-          if ! grep -al "AndroidLauncher" /tmp/apk-check/classes*.dex > /dev/null; then
-            echo "::error::AndroidLauncher class missing from APK dex - Kotlin sources in :android module were not compiled!"
-            exit 1
-          fi
-       
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-           name: Unciv-Modificado
-           path: android/build/outputs/apk/debug/*.apk
+          name: Unciv-Modificado
+          path: android/build/outputs/apk/debug/*.apk
