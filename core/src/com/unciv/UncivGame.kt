@@ -6,6 +6,7 @@ import com.unciv.logic.UncivShowableException
 import com.unciv.logic.Version
 import com.unciv.logic.automation.Timers
 import com.unciv.logic.civilization.PlayerType
+import com.unciv.logic.files.MapSaver
 import com.unciv.logic.files.UncivFiles
 import com.unciv.logic.multiplayer.Multiplayer
 import com.unciv.models.metadata.GameSettings
@@ -92,6 +93,12 @@ open class UncivGame(val isConsoleMode: Boolean = false) : Game(), PlatformSpeci
         }
         Current = this
         files = UncivFiles(Gdx.files, customDataDirectory)
+        val bundledMap = MapSaver.getBundledMap(MapSaver.defaultBundledMapName)
+        val localMap = files.getLocalFile("${MapSaver.mapsFolder}/${MapSaver.defaultBundledMapName}")
+        if (!localMap.exists() && bundledMap != null) {
+            localMap.parent().mkdirs()
+            bundledMap.copyTo(localMap)
+        }
         Concurrency.run {
             // Delete temporary files created when downloading mods
             val tempFiles = files.getLocalFile("mods").list().filter { !it.isDirectory && it.name().startsWith("temp-") }
