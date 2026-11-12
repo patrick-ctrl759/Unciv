@@ -10,6 +10,7 @@ import com.unciv.logic.map.TileMap
 object MapSaver {
 
     const val mapsFolder = "maps"
+    const val defaultBundledMapName = "Mundo_Real_5k"
     var saveZipped = true
 
     private fun getMap(mapName: String) = UncivGame.Current.files.getLocalFile("$mapsFolder/$mapName")
@@ -41,6 +42,10 @@ object MapSaver {
     fun getBundledMaps(): Array<FileHandle> {
         val folder = Gdx.files.internal(mapsFolder)
         return if (folder.exists()) folder.list() else emptyArray()
+    }
+    fun getBundledMap(mapName: String): FileHandle? {
+        val mapFile = Gdx.files.internal("$mapsFolder/$mapName")
+        return mapFile.takeIf { it.exists() && !it.isDirectory }
     }
 
     private fun mapFromJson(json: String): TileMap = json().fromJson(TileMap::class.java, json)

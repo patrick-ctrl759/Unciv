@@ -1,6 +1,7 @@
 package com.unciv.ui.screens.newgamescreen
 
 import com.badlogic.gdx.scenes.scene2d.ui.Table
+import com.unciv.logic.files.MapSaver
 import com.unciv.logic.map.MapGeneratedMainType
 import com.unciv.ui.components.extensions.toLabel
 import com.unciv.ui.components.input.onChange
@@ -22,8 +23,15 @@ class MapOptionsTable(private val newGameScreen: NewGameScreen) : Table() {
         // better control directly. Besides, the first Labels/Buttons should have 10f to look nice
         background = BaseScreen.skinStrings.getUiBackground("NewGameScreen/MapOptionsTable", tintColor = BaseScreen.skinStrings.skinConfig.clearColor)
 
+        val defaultBundledMap = MapSaver.getBundledMap(MapSaver.defaultBundledMapName)
+        if (mapParameters.name.isEmpty() && defaultBundledMap != null) {
+            mapParameters.name = defaultBundledMap.name()
+            mapParameters.type = MapGeneratedMainType.custom
+        }
+
         val mapTypes = arrayListOf(MapGeneratedMainType.generated, MapGeneratedMainType.randomGenerated)
-        if (savedMapOptionsTable.isNotEmpty()) mapTypes.add(MapGeneratedMainType.custom)
+        if (savedMapOptionsTable.isNotEmpty() || defaultBundledMap != null)
+            mapTypes.add(MapGeneratedMainType.custom)
         if (newGameScreen.game.files.getScenarioFiles().any()) mapTypes.add(MapGeneratedMainType.scenario)
 
         val initialMapType = mapParameters.type.takeIf { it in mapTypes } ?: MapGeneratedMainType.generated
