@@ -11,17 +11,103 @@ import com.unciv.logic.trade.TradeLogic
 import com.unciv.logic.trade.TradeOffer
 import com.unciv.logic.trade.TradeRequest
 import com.unciv.logic.trade.TradeOfferType
+import com.unciv.Constants
+import com.unciv.models.ruleset.tile.ResourceType
+import com.unciv.models.ruleset.unique.UniqueType
+import com.unciv.ui.screens.victoryscreen.RankingType
 import kotlin.math.min
 
 object TradeAutomation {
+
+    fun requestNeededResources(civInfo: Civilization) {
+        if (civInfo.isAtWar()) return
+
+        val neededResources = civInfo.gameInfo.ruleset.tileResources.values
+            .filter { it.isStockpiled && !it.isCityWide && !it.hasUnique(UniqueType.CannotBeTraded, civInfo.state) }
+            .mapNotNull { resource ->
+                val stockpile = civInfo.getResourceAmount(resource)
+                val production = civInfo.getCivResourceSupply().firstOrNull { it.resource == resource }?.amount ?: 0
+                val requiredForConstruction = civInfo.cities.any { city ->
+                    val queue = city.cityConstructions.constructionQueue
+                    city.getRuleset().buildings.values.any {
+                        it.shouldBeDisplayed(city.cityConstructions, queue)
+                            && resource.name in it.requiredResources(city.state)
+                    } || city.getRuleset().units.values.any {
+                        it.shouldBeDisplayed(city.cityConstructions, queue)
+                            && resource.name in it.requiredResources(city.state)
+                    }
+                }
+                val requiredForUpkeep = production < 0
+                val desiredStockpile = when {
+                    requiredForUpkeep || requiredForConstruction -> 10
+                    else -> 0
+                }
+                if (stockpile >= desiredStockpile) null
+                else resource to (desiredStockpile - stockpile).coerceAtLeast(1)
+            }
+            .sortedWith(compareBy(
+                { if (it.first.resourceType == ResourceType.Strategic) 0 else 1 },
+                { it.second }
+            ))
+
+        if (neededResources.isEmpty()) return
+
+        for ((resource, amountNeeded) in neededResources) {
+            val alreadyImporting = civInfo.diplomacy.values.any { diplomacyManager ->
+                diplomacyManager.trades.any { trade ->
+                    trade.theirOffers.any {
+                        it.type == TradeOfferType.Stockpiled_Resource_Per_Turn && it.name == resource.name
+                    }
+                }
+            }
+            if (alreadyImporting) continue
+
+            for (exporter in civInfo.getKnownCivs().filter { it.isMajorCiv && !it.isAtWarWith(civInfo) && !it.isDefeated() }) {
+                if (exporter.tradeRequests.any { it.requestingCiv == civInfo.civID }
+                    || civInfo.tradeRequests.any { it.requestingCiv == exporter.civID }) continue
+
+                val tradeLogic = TradeLogic(civInfo, exporter)
+                val resourceOffer = tradeLogic.theirAvailableOffers.firstOrNull {
+                    it.type == TradeOfferType.Stockpiled_Resource_Per_Turn && it.name == resource.name
+                } ?: continue
+                val goldPerTurn = civInfo.stats.statsForNextTurn.gold.toInt().coerceAtLeast(0)
+                val tariffPerUnit = TradeEvaluation().getResourceTributePerTurn(resource, 1, exporter)
+                if (tariffPerUnit <= 0 || goldPerTurn <= tariffPerUnit * 0.9f) continue
+
+                val quantity = minOf(
+                    amountNeeded,
+                    resourceOffer.amount,
+                    (goldPerTurn / 0.9f / tariffPerUnit).toInt()
+                )
+                if (quantity <= 0) continue
+
+                val trade = Trade()
+                trade.theirOffers.add(resourceOffer.copy(amount = quantity))
+                trade.ourOffers.add(TradeOffer(
+                    Constants.goldPerTurn,
+                    TradeOfferType.Gold_Per_Turn,
+                    TradeEvaluation().getResourceTributePerTurn(resource, quantity, exporter),
+                    speed = civInfo.gameInfo.speed
+                ))
+                exporter.tradeRequests.add(TradeRequest(civInfo.civID, trade.reverse()))
+                return
+            }
+        }
+    }
 
 
     fun respondToTradeRequests(civInfo: Civilization, tradeAndChangeState: Boolean) {
         for (tradeRequest in civInfo.tradeRequests.toList()) {
             val otherCiv = civInfo.gameInfo.getCivilization(tradeRequest.requestingCiv)
             // Treat 'no trade' state as if all trades are invalid - thus AIs will not update its "turns to offer"
-            if (!tradeAndChangeState || !TradeEvaluation().isTradeValid(tradeRequest.trade, civInfo, otherCiv))
+            if (!tradeAndChangeState) continue
+            if (!TradeEvaluation().isTradeValid(tradeRequest.trade, civInfo, otherCiv)) {
+                if (tradeRequest.trade.isUltimatum) {
+                    civInfo.tradeRequests.remove(tradeRequest)
+                    tradeRequest.decline(civInfo)
+                }
                 continue
+            }
 
             val tradeLogic = TradeLogic(civInfo, otherCiv)
             tradeLogic.currentTrade.set(tradeRequest.trade)
@@ -31,9 +117,15 @@ object TradeAutomation {
              * the same resource to ANOTHER civ in this turn. Complicated!
              */
             civInfo.tradeRequests.remove(tradeRequest)
-            if (TradeEvaluation().isTradeAcceptable(tradeLogic.currentTrade, civInfo, otherCiv)) {
+            val acceptsTrade = if (tradeLogic.currentTrade.isUltimatum)
+                isUltimatumAcceptable(civInfo, otherCiv, tradeLogic.currentTrade)
+            else TradeEvaluation().isTradeAcceptable(tradeLogic.currentTrade, civInfo, otherCiv)
+            if (acceptsTrade) {
                 tradeLogic.acceptTrade()
                 otherCiv.addNotification("[${civInfo.civName}] has accepted your trade request", NotificationCategory.Trade, NotificationIcon.Trade, civInfo.civName)
+            } else if (tradeLogic.currentTrade.isUltimatum) {
+                tradeRequest.decline(civInfo)
+                otherCiv.addNotification("[${civInfo.civName}] has rejected your ultimatum and declared war", NotificationCategory.Trade, NotificationIcon.Trade, civInfo.civName)
             } else {
                 val counteroffer = getCounteroffer(civInfo, tradeRequest)
                 if (counteroffer != null) {
@@ -47,6 +139,19 @@ object TradeAutomation {
             }
         }
         civInfo.tradeRequests.clear()
+    }
+
+    private fun isUltimatumAcceptable(civInfo: Civilization, requester: Civilization, trade: Trade): Boolean {
+        val tradeValue = TradeEvaluation().getTradeAcceptability(trade, civInfo, requester, includeDiplomaticGifts = false)
+        if (tradeValue >= 0) return true
+
+        val ourForce = civInfo.getStatForRanking(RankingType.Force).coerceAtLeast(1)
+        val requesterForce = requester.getStatForRanking(RankingType.Force)
+        val powerRatio = requesterForce.toFloat() / ourForce
+        if (powerRatio <= 1.1f) return false
+
+        val maximumConcessionValue = ((powerRatio - 1f) * 200f).toInt().coerceIn(0, 600)
+        return -tradeValue.toLong() <= maximumConcessionValue
     }
 
     /** @return a TradeRequest with the same ourOffers as [tradeRequest] but with enough theirOffers
@@ -78,6 +183,8 @@ object TradeAutomation {
                 continue // Players generally don't want to give up their cities, and they might misclick
             if (offer.type == TradeOfferType.Luxury_Resource)
                 continue // Don't ask for luxuries as counteroffer, players likely don't want to sell them if they didn't offer them already
+            if (offer.type == TradeOfferType.Stockpiled_Resource_Per_Turn)
+                continue // A recurring stockpile export needs a matching gold tribute.
             if (tradeLogic.currentTrade.theirOffers.any { it.type == offer.type && it.name == offer.name })
                 continue // So you don't get double offers of open borders declarations of war etc.
             if (offer.type == TradeOfferType.Treaty)

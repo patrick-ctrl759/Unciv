@@ -10,6 +10,7 @@ import com.unciv.models.ruleset.IConstruction
 import com.unciv.models.ruleset.INonPerpetualConstruction
 import com.unciv.models.ruleset.PerpetualConstruction
 import com.unciv.models.ruleset.unique.UniqueType
+import com.unciv.models.ruleset.unit.BaseUnit
 import com.unciv.models.stats.Stat
 import com.unciv.models.translations.tr
 import com.unciv.ui.audio.SoundPlayer
@@ -141,6 +142,8 @@ class BuyButtonFactory(val cityScreen: CityScreen) {
                     row()
                 }
             }
+            if (construction is BaseUnit && construction.isMilitary && stat == Stat.Gold)
+                addGoodSizedLabel("Instant military recruitment consumes 1 [Population] and can act this turn.").row()
             addGoodSizedLabel("Would you like to purchase [${construction.name}] for [$constructionStatBuyCost] [${stat.character}]?").row()
 
             addCloseButton(Constants.cancel, KeyboardBinding.Cancel) { cityScreen.updateAsync() }

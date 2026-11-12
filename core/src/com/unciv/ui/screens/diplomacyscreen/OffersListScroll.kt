@@ -61,6 +61,7 @@ class OffersListScroll(
                 Luxury_Resource -> "Luxury resources"
                 Strategic_Resource -> "Strategic resources"
                 Stockpiled_Resource -> "Stockpiled resources"
+                Stockpiled_Resource_Per_Turn -> "Stockpiled resources per turn"
                 Technology -> "Technologies"
                 WarDeclaration -> "Declarations of war"
                 PeaceProposal -> "Peace Proposals"
@@ -90,7 +91,7 @@ class OffersListScroll(
                 val tradeLabel = offer.getOfferText(untradableOffers.sumBy(offer.name))
                 val tradeIcon = when (offer.type) {
                     Embassy -> ImageGetter.getImage("OtherIcons/Star")
-                    Luxury_Resource, Strategic_Resource ->
+                    Luxury_Resource, Strategic_Resource, Stockpiled_Resource_Per_Turn ->
                         ImageGetter.getResourcePortrait(offer.name, 30f)
                     WarDeclaration, PeaceProposal ->
                         ImageGetter.getNationPortrait(ourCiv.ruleset.nations[offer.name]!!, 30f)
@@ -116,7 +117,7 @@ class OffersListScroll(
                         || (ourCiv.gold + theirCiv.gold > ourCiv.getResearchAgreementCost(theirCiv) * 2))) {
 
                     // highlight unique suggestions
-                    if (offerType in listOf(Luxury_Resource, Strategic_Resource)
+                    if (offerType in listOf(Luxury_Resource, Strategic_Resource, Stockpiled_Resource_Per_Turn)
                             && otherSideOffers.all { it.type != offer.type || it.name != offer.name || it.amount < 0}) // we can 'have' negative amounts of resources 
                         tradeButton.color = Color.GREEN
 

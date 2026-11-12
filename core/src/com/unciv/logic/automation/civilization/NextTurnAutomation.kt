@@ -73,6 +73,7 @@ object NextTurnAutomation {
             DiplomacyAutomation.offerDefensivePact(civView)
             DiplomacyAutomation.checkMilitaryPresenceNearBorder(civView)
             TradeAutomation.exchangeLuxuries(civInfo)
+            TradeAutomation.requestNeededResources(civInfo)
             
             issueRequests(civView)
             adoptPolicy(civView)  // todo can take a second - why?

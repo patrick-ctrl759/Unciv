@@ -9,6 +9,7 @@ import com.unciv.logic.map.tile.Tile
 import com.unciv.testing.BaseTestRunner
 import com.unciv.testing.TestGame
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -51,6 +52,47 @@ class BattleDamageTest {
         // then
         assertEquals(1, attackModifiers.size)
         assertEquals(25, attackModifiers.sumValues())
+    }
+
+    @Test
+    fun `military units in a stack provide up to twenty percent formation support`() {
+        testGame.addUnit("Warrior", attackerCiv, defaultAttackerTile)
+        testGame.addUnit("Warrior", attackerCiv, defaultAttackerTile)
+        testGame.addUnit("Warrior", defenderCiv, defaultDefenderTile)
+        testGame.addUnit("Warrior", defenderCiv, defaultDefenderTile)
+        val attacker = MapUnitCombatant(defaultAttackerUnit)
+        val defender = MapUnitCombatant(defaultDefenderUnit)
+
+        val attackModifiers = BattleDamage.getAttackModifiers(attacker, defender, defaultAttackerTile)
+        val defenceModifiers = BattleDamage.getDefenceModifiers(attacker, defender, defaultAttackerTile)
+
+        assertEquals(20, attackModifiers["Formation support"])
+        assertEquals(20, defenceModifiers["Formation support"])
+    }
+
+    @Test
+    fun `strongest defending unit in a stack becomes the frontline`() {
+        val weakerDefender = testGame.addUnit("Warrior", defenderCiv, defaultDefenderTile)
+        val strongerDefender = testGame.addUnit("Spearman", defenderCiv, defaultDefenderTile)
+        val attacker = MapUnitCombatant(defaultAttackerUnit)
+
+        val expectedFrontline = listOf(weakerDefender, defaultDefenderUnit, strongerDefender).maxBy {
+            BattleDamage.getDefendingStrength(attacker, MapUnitCombatant(it), defaultAttackerTile)
+        }
+
+        val frontline = Battle.getMapCombatantOfTile(defaultDefenderTile, attacker) as MapUnitCombatant
+
+        assertEquals(expectedFrontline, frontline.unit)
+    }
+
+    @Test
+    fun `military stack cannot exceed three units`() {
+        testGame.addUnit("Warrior", attackerCiv, defaultAttackerTile)
+        testGame.addUnit("Warrior", attackerCiv, defaultAttackerTile)
+        val unitOutsideStack = testGame.addUnit("Warrior", attackerCiv, testGame.getTile(-2, -2))
+
+        assertEquals(3, defaultAttackerTile.getMilitaryUnits().count())
+        assertFalse(unitOutsideStack.movement.canMoveTo(defaultAttackerTile))
     }
 
     @Test

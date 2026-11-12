@@ -801,6 +801,9 @@ class CityConstructions : IsPartOfGameInfoSerialization {
         stat: Stat = Stat.Gold,
         tile: Tile? = null
     ): Boolean {
+        if (requiresRecruitmentPopulation(construction, stat) && city.population.population <= 1)
+            return false
+
         // Support UniqueType.CreatesOneImprovement: it is active when getImprovementToCreate returns an improvement
         val improvementToPlace = (construction as? Building)?.getImprovementToCreate(city.getRuleset(), city.civ)
         if (improvementToPlace != null) {
@@ -849,6 +852,9 @@ class CityConstructions : IsPartOfGameInfoSerialization {
             }
         }
 
+        if (requiresRecruitmentPopulation(construction, stat))
+            city.population.addPopulation(-1)
+
         if (queuePosition >= 0) removeFromQueue(queuePosition, automatic)
         validateConstructionQueue()
 
@@ -864,6 +870,7 @@ class CityConstructions : IsPartOfGameInfoSerialization {
     @Readonly
     fun isConstructionPurchaseAllowed(construction: INonPerpetualConstruction, stat: Stat, constructionBuyCost: Int): Boolean {
         return when {
+            requiresRecruitmentPopulation(construction, stat) && city.population.population <= 1 -> false
             city.isPuppet && !city.getMatchingUniques(UniqueType.MayBuyConstructionsInPuppets).any() -> false
             city.isInResistance() -> false
             !construction.isPurchasable(city.cityConstructions) -> false    // checks via 'rejection reason'
@@ -874,6 +881,10 @@ class CityConstructions : IsPartOfGameInfoSerialization {
             else -> city.getStatReserve(stat) >= constructionBuyCost
         }
     }
+
+    @Readonly
+    private fun requiresRecruitmentPopulation(construction: INonPerpetualConstruction, stat: Stat) =
+        stat == Stat.Gold && construction is BaseUnit && construction.isMilitary
 
     @Readonly
     fun isConstructionPurchaseBlockedByUnit(construction: INonPerpetualConstruction): Boolean {

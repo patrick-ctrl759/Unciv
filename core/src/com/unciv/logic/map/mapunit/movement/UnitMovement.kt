@@ -747,13 +747,19 @@ class UnitMovement(val unit: MapUnit) {
             && !unit.getOtherEscortUnit()!!.movement.canMoveTo(tile, assumeCanPassThrough, allowSwap, includeOtherEscortUnit = false))
             return CannotMoveToReason.EscortCannotMove
 
-        val tileIsEmpty = if (unit.isCivilian())
-            (tile.civilianUnit == null || (allowSwap && tile.civilianUnit!!.owner == unit.owner))
-                && (tile.militaryUnit == null || tile.militaryUnit!!.owner == unit.owner)
-        else
-        // can skip checking for airUnit since not a city
-            (tile.militaryUnit == null || (allowSwap && tile.militaryUnit!!.owner == unit.owner))
-                && (tile.civilianUnit == null || tile.civilianUnit!!.owner == unit.owner || unit.civ.isAtWarWith(tile.civilianUnit!!.civ))
+        val militaryUnits = tile.getMilitaryUnits().toList()
+        val militaryStackCanAcceptUnit = when {
+            unit.isCivilian() -> militaryUnits.all { it.owner == unit.owner }
+            militaryUnits.isEmpty() -> true
+            militaryUnits.any { it.owner != unit.owner } ->
+                allowSwap && militaryUnits.first().owner == unit.owner
+            allowSwap && militaryUnits.size >= 3 -> true
+            else -> militaryUnits.size < 3
+        }
+        val civilianUnitCanShareTile = tile.civilianUnit == null
+            || tile.civilianUnit!!.owner == unit.owner
+            || unit.civ.isAtWarWith(tile.civilianUnit!!.civ)
+        val tileIsEmpty = militaryStackCanAcceptUnit && civilianUnitCanShareTile
 
         if (!tileIsEmpty) return CannotMoveToReason.TileIsNotEmpty
 

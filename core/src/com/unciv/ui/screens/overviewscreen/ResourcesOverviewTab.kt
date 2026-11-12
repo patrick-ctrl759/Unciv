@@ -65,7 +65,6 @@ class ResourcesOverviewTab(
     private val resources: List<TileResource> = allResources
         .map { it.resource }
         .filter {
-            it.resourceType != ResourceType.Bonus &&
             !it.hasUnique(UniqueType.NotShownOnWorldScreen, viewingPlayer.getCiv().state) &&
             !it.isCityWide // These are Civ-wide resources, so don't show the city-wide ones.
         }
@@ -301,7 +300,11 @@ class ResourcesOverviewTab(
         for (otherCiv in viewingPlayer.getCiv().getKnownCivs()) {
             // Show resources received through trade
             for (trade in otherCiv.tradeRequests.filter { it.requestingCiv == viewingPlayer.getCiv().civID })
-                for (offer in trade.trade.theirOffers.filter { it.type == TradeOfferType.Strategic_Resource || it.type == TradeOfferType.Luxury_Resource })
+                for (offer in trade.trade.theirOffers.filter {
+                    it.type == TradeOfferType.Strategic_Resource
+                        || it.type == TradeOfferType.Luxury_Resource
+                        || it.type == TradeOfferType.Stockpiled_Resource_Per_Turn
+                })
                     newResourceSupplyList.add(gameInfo.ruleset.tileResources[offer.name]!!, ExtraInfoOrigin.TradeOffer.name, offer.amount)
 
             // Show resources your city-state allies have left unimproved
@@ -310,9 +313,8 @@ class ResourcesOverviewTab(
                 city.addUnimproved()
         }
 
-        /** Show unlocked **strategic** resources even if you have no access at all */
+        /** Show known resources even if you have no current source */
         for (resource in gameInfo.ruleset.tileResources.values) {
-            if (resource.resourceType != ResourceType.Strategic) continue
             if (viewingPlayer.canSeeResource(resource))
                 newResourceSupplyList.add(resource, "No source", 0)
         }

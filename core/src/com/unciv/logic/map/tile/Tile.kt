@@ -42,6 +42,7 @@ import kotlin.random.Random
 class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
     //region Serialized fields
     var militaryUnit: MapUnit? = null
+    var additionalMilitaryUnits = ArrayList<MapUnit>(0)
     var civilianUnit: MapUnit? = null
     var airUnits = ArrayList<MapUnit>(0)
 
@@ -57,6 +58,7 @@ class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
     var resource: String? = null
         private set
     var resourceAmount: Int = 0
+    var resourceReserve: Int = 0
 
     var improvement: String? = null
     var improvementIsPillaged = false
@@ -239,6 +241,7 @@ class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
         toReturn.isOcean = isOcean
         if (addUnits) {
             if (militaryUnit != null) toReturn.militaryUnit = militaryUnit!!.clone()
+            toReturn.additionalMilitaryUnits = ArrayList(additionalMilitaryUnits.map { it.clone() })
             if (civilianUnit != null) toReturn.civilianUnit = civilianUnit!!.clone()
             toReturn.airUnits = ArrayList(airUnits.map { it.clone() })
         }
@@ -249,6 +252,7 @@ class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
         toReturn.naturalWonder = naturalWonder
         toReturn.resource = resource
         toReturn.resourceAmount = resourceAmount
+        toReturn.resourceReserve = resourceReserve
         toReturn.improvement = improvement
         @LocalState val cloneImprovementQueue = toReturn.improvementQueue
         cloneImprovementQueue.addAll(improvementQueue.map { it.clone() })
@@ -279,20 +283,28 @@ class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
     @Readonly
     fun getUnits(): Sequence<MapUnit> {
         // common case - do not allocate memory for a new sequence
-        if (militaryUnit == null && civilianUnit == null && airUnits.isEmpty())
+        if (militaryUnit == null && additionalMilitaryUnits.isEmpty() && civilianUnit == null && airUnits.isEmpty())
             return emptySequence()
 
         return sequence {
             if (militaryUnit != null) yield(militaryUnit!!)
+            yieldAll(additionalMilitaryUnits)
             if (civilianUnit != null) yield(civilianUnit!!)
             if (airUnits.isNotEmpty()) yieldAll(airUnits)
         }
+    }
+
+    @Readonly
+    fun getMilitaryUnits(): Sequence<MapUnit> = sequence {
+        if (militaryUnit != null) yield(militaryUnit!!)
+        yieldAll(additionalMilitaryUnits)
     }
 
     /** This is for performance reasons of canPassThrough() - faster than getUnits().firstOrNull() */
     @Readonly
     fun getFirstUnit(): MapUnit? {
         if (militaryUnit != null) return militaryUnit!!
+        if (additionalMilitaryUnits.isNotEmpty()) return additionalMilitaryUnits.first()
         if (civilianUnit != null) return civilianUnit!!
         if (airUnits.isNotEmpty()) return airUnits.first()
         return null
@@ -854,6 +866,8 @@ class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
         isOcean = getBaseTerrain().isOcean
 
         // Resource amounts missing - Old save or bad mapgen?
+        if (tileResource != null && resourceReserve <= 0)
+            resourceReserve = InitialResourceReserve
         if (isTilemapInitialized() && tileResource?.resourceType == ResourceType.Strategic && resourceAmount == 0) {
             // Let's assume it's a small deposit
             setTileResource(tileResource!!, majorDeposit = false)
@@ -908,10 +922,18 @@ class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
      */
     fun setTileResource(newResource: String?, updateCache: Boolean = true) {
         if (updateCache) {
+            if (resource != newResource)
+                resourceReserve = if (newResource == null) 0 else InitialResourceReserve
             val resource = ruleset.tileResources[newResource]
             tileResource = resource
+            if (newResource == null) resourceAmount = 0
             return
-        } else resource = newResource
+        } else {
+            if (resource != newResource)
+                resourceReserve = if (newResource == null) 0 else InitialResourceReserve
+            resource = newResource
+            if (newResource == null) resourceAmount = 0
+        }
     }
 
     /**
@@ -924,6 +946,7 @@ class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
      */
     fun setTileResource(newResource: TileResource, majorDeposit: Boolean? = null, rng: Random = Random.Default) {
         tileResource = newResource
+        resourceReserve = InitialResourceReserve
 
         if (newResource.resourceType != ResourceType.Strategic) {
             resourceAmount = 0
@@ -944,6 +967,11 @@ class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
             MapResourceSetting.abundant.label -> depositAmounts.abundant
             else -> depositAmounts.default
         }
+    }
+
+    companion object {
+        const val InitialResourceReserve = 1500
+        const val ResourceExtractionPerTurn = 2
     }
 
     fun setTerrainFeatures(terrainFeatureList: List<String>) {
@@ -1026,7 +1054,11 @@ class Tile : IsPartOfGameInfoSerialization, TileInterface<Tile> {
         when {
             airUnits.contains(mapUnit) -> airUnits.remove(mapUnit)
             civilianUnit == mapUnit -> civilianUnit = null
-            militaryUnit == mapUnit -> militaryUnit = null
+            militaryUnit == mapUnit -> {
+                militaryUnit = additionalMilitaryUnits.firstOrNull()
+                if (additionalMilitaryUnits.isNotEmpty()) additionalMilitaryUnits.removeAt(0)
+            }
+            additionalMilitaryUnits.remove(mapUnit) -> Unit
         }
     }
 

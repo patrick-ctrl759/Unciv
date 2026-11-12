@@ -1,12 +1,15 @@
 package com.unciv.logic.automation.civilization
 
+import com.unciv.Constants
 import com.unciv.logic.civilization.Civilization
 import com.unciv.logic.civilization.diplomacy.DiplomacyFlags
 import com.unciv.logic.civilization.diplomacy.RelationshipLevel
+import com.unciv.logic.trade.Trade
+import com.unciv.logic.trade.TradeEvaluation
 import com.unciv.logic.trade.TradeLogic
 import com.unciv.logic.trade.TradeOffer
-import com.unciv.logic.trade.TradeRequest
 import com.unciv.logic.trade.TradeOfferType
+import com.unciv.logic.trade.TradeRequest
 import com.unciv.ui.screens.victoryscreen.RankingType
 import com.unciv.view.CivView
 
@@ -108,10 +111,46 @@ object DeclareWarTargetAutomation {
     private fun declareWar(civView: CivView, target: Civilization, motivation: Float): Boolean {
         val civInfo = civView.getCiv()
         if (DeclareWarPlanEvaluator.evaluateDeclareWarPlan(civInfo, target, motivation) > 0) {
+            if (issueUltimatum(civInfo, target)) return true
             civInfo.getDiplomacyManager(target)!!.declareWar()
             return true
         }
         return false
+    }
+
+    private fun issueUltimatum(civInfo: Civilization, target: Civilization): Boolean {
+        if (!target.isMajorCiv || civInfo.isAtWarWith(target)) return false
+        val diplomacyManager = civInfo.getDiplomacyManager(target) ?: return false
+        if (diplomacyManager.trades.any { it.isUltimatum }
+            || target.tradeRequests.any { it.requestingCiv == civInfo.civID }) return true
+
+        val tradeLogic = TradeLogic(civInfo, target)
+        val ultimatum = Trade().apply { isUltimatum = true }
+        val targetGoldPerTurn = target.stats.statsForNextTurn.gold.toInt()
+        if (targetGoldPerTurn > 0) {
+            val amount = (targetGoldPerTurn / 5).coerceIn(1, 5)
+            ultimatum.theirOffers.add(
+                TradeOffer(Constants.goldPerTurn, TradeOfferType.Gold_Per_Turn, amount, civInfo.gameInfo.speed)
+            )
+        } else {
+            val resourceOffer = tradeLogic.theirAvailableOffers.firstOrNull {
+                it.type == TradeOfferType.Stockpiled_Resource_Per_Turn && it.amount > 0
+            }
+            if (resourceOffer != null) {
+                ultimatum.theirOffers.add(resourceOffer.copy(amount = 1))
+                val resource = target.gameInfo.ruleset.tileResources[resourceOffer.name] ?: return false
+                val tribute = TradeEvaluation().getResourceTributePerTurn(resource, 1, target)
+                ultimatum.ourOffers.add(
+                    TradeOffer(Constants.goldPerTurn, TradeOfferType.Gold_Per_Turn, tribute, civInfo.gameInfo.speed)
+                )
+            } else {
+                val city = target.cities.firstOrNull { !it.isCapital() && !it.isInResistance() } ?: return false
+                ultimatum.theirOffers.add(TradeOffer(city.id, TradeOfferType.City, speed = civInfo.gameInfo.speed))
+            }
+        }
+
+        target.tradeRequests.add(TradeRequest(civInfo.civID, ultimatum.reverse()))
+        return true
     }
 
     /**

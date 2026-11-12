@@ -1058,7 +1058,10 @@ class MapUnit : IsPartOfGameInfoSerialization {
             }
             baseUnit.isAirUnit() -> tile.airUnits.add(this)
             isCivilian() -> tile.civilianUnit = this
-            else -> tile.militaryUnit = this
+            else -> {
+                if (tile.militaryUnit == null) tile.militaryUnit = this
+                else tile.additionalMilitaryUnits.add(this)
+            }
         }
         // this check is here in order to not load the fresh built unit into carrier right after the build
         if (baseUnit.isAirUnit()){

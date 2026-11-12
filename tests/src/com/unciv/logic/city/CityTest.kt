@@ -3,6 +3,7 @@ package com.unciv.logic.city
 import com.unciv.Constants
 import com.unciv.logic.civilization.Civilization
 import com.unciv.logic.map.HexCoord
+import com.unciv.models.stats.Stat
 import com.unciv.testing.BaseTestRunner
 import com.unciv.testing.TestGame
 import org.junit.Assert.*
@@ -189,6 +190,52 @@ class CityTest {
         assertEquals(secondCity, targetTile.getCity())
         assertEquals("Farm", targetTile.improvement)
         assertFalse(targetTile.isMarkedForCreatesOneImprovement())
+    }
+
+    @Test
+    fun `buying a military unit for gold consumes one population and leaves it ready to act`() {
+        capitalCity.population.setPopulation(3)
+        val warrior = testGame.ruleset.units["Warrior"]!!
+        val goldCost = warrior.getStatBuyCost(capitalCity, Stat.Gold)!!
+        testCiv.addGold(goldCost)
+
+        val purchased = capitalCity.cityConstructions.purchaseConstruction(
+            warrior,
+            queuePosition = -1,
+            automatic = false,
+            stat = Stat.Gold
+        )
+
+        assertTrue(purchased)
+        assertEquals(2, capitalCity.population.population)
+        val recruitedUnit = capitalCity.getCenterTile().militaryUnit!!
+        assertTrue(recruitedUnit.hasMovement())
+    }
+
+    @Test
+    fun `buying a military unit for gold requires population above one`() {
+        capitalCity.population.setPopulation(1)
+        val warrior = testGame.ruleset.units["Warrior"]!!
+        val goldCost = warrior.getStatBuyCost(capitalCity, Stat.Gold)!!
+        testCiv.addGold(goldCost)
+
+        assertFalse(
+            capitalCity.cityConstructions.isConstructionPurchaseAllowed(
+                warrior,
+                Stat.Gold,
+                goldCost
+            )
+        )
+        assertFalse(
+            capitalCity.cityConstructions.purchaseConstruction(
+                warrior,
+                queuePosition = -1,
+                automatic = false,
+                stat = Stat.Gold
+            )
+        )
+        assertEquals(1, capitalCity.population.population)
+        assertNull(capitalCity.getCenterTile().militaryUnit)
     }
 
     private fun createFarmPlacingBuilding() =

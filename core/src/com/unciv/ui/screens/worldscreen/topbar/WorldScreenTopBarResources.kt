@@ -5,7 +5,6 @@ import com.badlogic.gdx.scenes.scene2d.Touchable
 import com.badlogic.gdx.scenes.scene2d.ui.Label
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.unciv.logic.civilization.Civilization
-import com.unciv.models.ruleset.tile.ResourceType
 import com.unciv.models.ruleset.tile.TileResource
 import com.unciv.models.ruleset.unique.UniqueType
 import com.unciv.models.translations.tr
@@ -61,9 +60,9 @@ internal class WorldScreenTopBarResources(topbar: WorldScreenTopBar) : ScalingTa
             worldScreen.openEmpireOverview(EmpireOverviewCategories.Resources)
         }
 
-        val strategicResources = worldScreen.gameInfo.ruleset.tileResources.values
-            .filter { it.resourceType == ResourceType.Strategic && !it.isCityWide }
-        for (resource in strategicResources) {
+        val resources = worldScreen.gameInfo.ruleset.tileResources.values
+            .filter { !it.isCityWide }
+        for (resource in resources) {
             val resourceImage = ImageGetter.getResourcePortrait(resource.name, iconSize)
             val resourceLabel = "0".toLabel()
             resourceActors += ResourceActors(resource, resourceLabel, resourceImage)

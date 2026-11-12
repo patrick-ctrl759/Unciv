@@ -12,6 +12,7 @@ import com.unciv.logic.map.mapunit.MapUnit
 import com.unciv.logic.map.mapunit.UnitTurnManager
 import com.unciv.logic.map.tile.Tile
 import com.unciv.logic.trade.TradeEvaluation
+import com.unciv.logic.trade.TradeOfferType
 import com.unciv.models.ruleset.unique.UniqueTriggerActivation
 import com.unciv.models.ruleset.unique.UniqueType
 import com.unciv.models.ruleset.unique.endTurn
@@ -37,6 +38,9 @@ class TurnManager(val civInfo: Civilization) {
         civInfo.cache.updateCivResources() // If you offered a trade last turn, this turn it will have been accepted/declined
         for (stockpiledResource in civInfo.getCivResourceSupply().filter { it.resource.isStockpiled })
             civInfo.gainStockpiledResource(stockpiledResource.resource, stockpiledResource.amount)
+        transferStockpiledResourcesFromTrade()
+        extractFiniteResources()
+        civInfo.cache.updateCivResources()
 
         civInfo.civConstructions.startTurn()
         civInfo.attacksSinceTurnStart.clear()
@@ -118,6 +122,47 @@ class TurnManager(val civInfo: Civilization) {
         }
 
         updateWinningCiv()
+    }
+
+    private fun extractFiniteResources() {
+        for (tile in civInfo.gameInfo.tileMap.values) {
+            if (tile.getOwner() != civInfo || tile.resourceReserve <= 0) continue
+            if (!tile.providesResources(civInfo)) continue
+
+            tile.resourceReserve = (tile.resourceReserve - Tile.ResourceExtractionPerTurn).coerceAtLeast(0)
+            if (tile.resourceReserve == 0) {
+                tile.tileResource = null
+                tile.resourceAmount = 0
+                tile.improvement = null
+                tile.tileImprovement = null
+                tile.improvementIsPillaged = false
+            }
+
+        }
+    }
+
+    private fun transferStockpiledResourcesFromTrade() {
+        val productionAvailable = civInfo.getCivResourceSupply()
+            .filter { it.resource.isStockpiled && it.amount > 0 }
+            .associate { it.resource.name to it.amount }
+            .toMutableMap()
+
+        for (diplomacyManager in civInfo.diplomacy.values) {
+            for (trade in diplomacyManager.trades) {
+                for (offer in trade.ourOffers.filter {
+                    it.type == TradeOfferType.Stockpiled_Resource_Per_Turn && it.duration > 0
+                }) {
+                    val resource = civInfo.gameInfo.ruleset.tileResources[offer.name] ?: continue
+                    val available = productionAvailable[resource.name] ?: 0
+                    val transferred = min(offer.amount, available)
+                    if (transferred <= 0) continue
+
+                    civInfo.gainStockpiledResource(resource, -transferred)
+                    diplomacyManager.otherCiv.gainStockpiledResource(resource, transferred)
+                    productionAvailable[resource.name] = available - transferred
+                }
+            }
+        }
     }
 
 

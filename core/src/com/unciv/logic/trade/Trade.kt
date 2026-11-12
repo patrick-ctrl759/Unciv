@@ -11,11 +11,13 @@ class Trade : IsPartOfGameInfoSerialization {
 
     val theirOffers = TradeOffersList()
     val ourOffers = TradeOffersList()
+    var isUltimatum = false
 
     fun reverse(): Trade {
         val newTrade = Trade()
         newTrade.theirOffers += ourOffers.map { it.copy() }
         newTrade.ourOffers += theirOffers.map { it.copy() }
+        newTrade.isUltimatum = isUltimatum
         return newTrade
     }
 
@@ -23,6 +25,7 @@ class Trade : IsPartOfGameInfoSerialization {
     fun equalTrade(trade: Trade): Boolean {
         if (trade.ourOffers.size != ourOffers.size
             || trade.theirOffers.size != theirOffers.size
+            || trade.isUltimatum != isUltimatum
         ) return false
 
         for (offer in trade.ourOffers)
@@ -38,6 +41,7 @@ class Trade : IsPartOfGameInfoSerialization {
         val toReturn = Trade()
         toReturn.theirOffers.addAll(theirOffers)
         toReturn.ourOffers.addAll(ourOffers)
+        toReturn.isUltimatum = isUltimatum
         return toReturn
     }
 
@@ -46,6 +50,7 @@ class Trade : IsPartOfGameInfoSerialization {
         ourOffers.addAll(trade.ourOffers)
         theirOffers.clear()
         theirOffers.addAll(trade.theirOffers)
+        isUltimatum = trade.isUltimatum
     }
 
     @Readonly fun isPeaceTreaty() = ourOffers.any { it.type == TradeOfferType.Treaty && it.name == Constants.peaceTreaty }
@@ -56,6 +61,11 @@ class TradeRequest : IsPartOfGameInfoSerialization {
     fun decline(decliningCiv: Civilization) {
         val requestingCivInfo = decliningCiv.gameInfo.getCivilization(requestingCiv)
         val requestingCivDiploManager = requestingCivInfo.getDiplomacyManager(decliningCiv)!!
+        if (trade.isUltimatum) {
+            if (!requestingCivInfo.isAtWarWith(decliningCiv) && !requestingCivInfo.isDefeated())
+                requestingCivDiploManager.declareWar()
+            return
+        }
         // the numbers of the flags (20,5) are the amount of turns to wait until offering again
         if (trade.ourOffers.all { it.type == TradeOfferType.Luxury_Resource }
             && trade.theirOffers.all { it.type == TradeOfferType.Luxury_Resource })

@@ -554,7 +554,8 @@ class City : IsPartOfGameInfoSerialization, INamed {
         return when {
             construction.isCivilian() -> tile.civilianUnit == null
             construction.isAirUnit() -> true // Dealt with in MapUnit.getRejectionReasons
-            else -> tile.militaryUnit == null
+            else -> tile.getMilitaryUnits().count() < 3
+                && tile.getMilitaryUnits().all { it.civ == civ }
         }
     }
 

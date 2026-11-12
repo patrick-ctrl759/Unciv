@@ -517,9 +517,7 @@ class Civilization : IsPartOfGameInfoSerialization {
     @Readonly
     fun getCivResourceSupply(): ResourceSupplyList = summarizedCivResourceSupply
 
-    /** Preserves some origins for resources so we can separate them for trades
-     * Stockpiled uniques cannot be traded currently
-     */
+    /** Preserves resource origins so we can separate recurring trade offers. */
     @Readonly
     fun getPerTurnResourcesWithOriginsForTrade(): ResourceSupplyList {
         val newResourceSupplyList = ResourceSupplyList(keepZeroAmounts = true)
@@ -542,13 +540,12 @@ class Civilization : IsPartOfGameInfoSerialization {
     fun getStockpiledResourcesForTrade(): ResourceSupplyList {
         val newResourceSupplyList = ResourceSupplyList(keepZeroAmounts = false)
 
-        for (resourceSupply in detailedCivResources) {
-            val resource = resourceSupply.resource
-            if (!resource.isStockpiled) continue
+        for (resource in gameInfo.ruleset.tileResources.values) {
+            val amount = resourceStockpiles[resource.name]
+            if (amount <= 0) continue
             if (resource.hasUnique(UniqueType.CannotBeTraded, state)) continue
-            if (!resource.hasUnique(UniqueType.AiWillSellAt, state) && !resource.hasUnique(UniqueType.AiWillBuyAt, state)) continue
-            
-            newResourceSupplyList.add(resource, Constants.tradable, resourceSupply.amount)
+
+            newResourceSupplyList.add(resource, Constants.tradable, amount)
         }
         return newResourceSupplyList
     }

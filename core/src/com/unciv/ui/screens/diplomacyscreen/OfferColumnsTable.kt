@@ -3,6 +3,7 @@ package com.unciv.ui.screens.diplomacyscreen
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.unciv.Constants
 import com.unciv.logic.trade.TradeOffer
+import com.unciv.logic.trade.TradeEvaluation
 import com.unciv.logic.trade.TradeOffersList
 import com.unciv.logic.trade.TradeOfferType
 import com.unciv.models.translations.tr
@@ -26,6 +27,22 @@ class OfferColumnsTable(
     fun addOffer(offer: TradeOffer, offerList: TradeOffersList, correspondingOfferList: TradeOffersList) {
         offerList.add(offer.copy())
         if (offer.type == TradeOfferType.Treaty) correspondingOfferList.add(offer.copy())
+        if (offer.type == TradeOfferType.Stockpiled_Resource_Per_Turn) {
+            val resource = ourCiv.ruleset.tileResources[offer.name]
+            if (resource != null) {
+                val civ = ourCiv.getCiv()
+                val tribute = TradeEvaluation().getResourceTributePerTurn(resource, kotlin.math.abs(offer.amount), civ) *
+                    if (offer.amount < 0) -1 else 1
+                correspondingOfferList.add(
+                    TradeOffer(
+                        Constants.goldPerTurn,
+                        TradeOfferType.Gold_Per_Turn,
+                        tribute,
+                        duration = offer.duration
+                    )
+                )
+            }
+        }
         onChange()
     }
 

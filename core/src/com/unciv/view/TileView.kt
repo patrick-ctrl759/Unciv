@@ -2,6 +2,7 @@ package com.unciv.view
 
 import com.unciv.logic.city.City
 import com.unciv.UncivGame
+import com.unciv.logic.battle.MapUnitCombatant
 import com.unciv.logic.civilization.Civilization
 import com.unciv.logic.map.MapPathing
 import com.unciv.logic.map.TileMap
@@ -88,8 +89,10 @@ class TileView internal constructor(private val tile: Tile, val tileMapView: Til
         if (tile.isCityCenter())
             return gameView.getForeignCityView(tile.getCity()!!).asCombatant()
 
-        val militaryUnit = tile.militaryUnit
-        if (militaryUnit != null && isVisible(militaryUnit))
+        val militaryUnit = tile.getMilitaryUnits().filter { isVisible(it) }.maxByOrNull {
+            MapUnitCombatant(it).getDefendingStrength(null)
+        }
+        if (militaryUnit != null)
             return toForeignMapUnitView(militaryUnit).asCombatant()
         val civilianUnit = tile.civilianUnit
         if (civilianUnit != null && isVisible(civilianUnit))
@@ -191,6 +194,7 @@ class TileView internal constructor(private val tile: Tile, val tileMapView: Til
     }
     val resource: String? get() = tile.resource
     val resourceAmount: Int get() = tile.resourceAmount
+    val resourceReserve: Int get() = tile.resourceReserve
     val naturalWonder: String? get() = tile.naturalWonder
     val roadStatus: RoadStatus get() = tile.roadStatus
     val roadIsPillaged: Boolean get() = tile.roadIsPillaged

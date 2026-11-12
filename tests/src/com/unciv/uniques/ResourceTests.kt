@@ -1,6 +1,7 @@
 package com.unciv.uniques
 
 import com.unciv.logic.civilization.PlayerType
+import com.unciv.logic.civilization.managers.TurnManager
 import com.unciv.logic.map.HexCoord
 import com.unciv.models.ruleset.BeliefType
 import com.unciv.models.ruleset.unique.Unique
@@ -20,11 +21,14 @@ class ResourceTests {
     private val civInfo = game.addCiv()
     private val city = game.addCity(civInfo, game.tileMap[0,0])
 
+    private fun resourceIncome(resourceName: String) =
+        civInfo.getCivResourceSupply().firstOrNull { it.resource.name == resourceName }?.amount ?: 0
+
     @Test
     fun testConsumesResourceUnique() {
         val consumesCoal = game.createBuilding("Consumes [1] [Coal]")
         city.cityConstructions.addBuilding(consumesCoal)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == -1)
+        Assert.assertEquals(-1, resourceIncome("Coal"))
     }
 
     @Test
@@ -35,16 +39,16 @@ class ResourceTests {
         val doubleStrategicProduction = game.createBuilding("[+100]% [Strategic] resource production")
 
         city.cityConstructions.addBuilding(consumesCoal)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == -1)
+        Assert.assertEquals(-1, resourceIncome("Coal"))
 
         city.cityConstructions.addBuilding(doubleCoal)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == -1)
+        Assert.assertEquals(-1, resourceIncome("Coal"))
 
         city.cityConstructions.addBuilding(doubleStrategic)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == -1)
+        Assert.assertEquals(-1, resourceIncome("Coal"))
 
         city.cityConstructions.addBuilding(doubleStrategicProduction)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == -1)
+        Assert.assertEquals(-1, resourceIncome("Coal"))
     }
 
     @Test
@@ -54,13 +58,13 @@ class ResourceTests {
         val doubleStrategicProduction = game.createBuilding("[+100]% [Strategic] resource production")
 
         city.cityConstructions.addBuilding(providesCoal)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == 1)
+        Assert.assertEquals(1, resourceIncome("Coal"))
         
         city.cityConstructions.addBuilding(doubleStrategicProduction)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == 2)
+        Assert.assertEquals(2, resourceIncome("Coal"))
 
         city.cityConstructions.addBuilding(consumesCoal)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == 1) // Produce 2, consume 1
+        Assert.assertEquals(1, resourceIncome("Coal")) // Produce 2, consume 1
     }
 
     @Test
@@ -68,7 +72,7 @@ class ResourceTests {
         val resourceProvider = game.createBuilding("Provides [1] [Coal]")
         val resourceProviderProvider = game.createBuilding("Gain a free [${resourceProvider.name}] [in this city]")
         city.cityConstructions.addBuilding(resourceProviderProvider)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == 1)
+        Assert.assertEquals(1, resourceIncome("Coal"))
     }
 
     @Test
@@ -79,11 +83,11 @@ class ResourceTests {
         tile.setImprovement("Mine")
 
         civInfo.tech.addTechnology(game.ruleset.tileImprovements["Mine"]!!.techRequired!!)
-        assertEquals(civInfo.getCivResourcesByName()["Coal"], 0)
+        assertEquals(0, resourceIncome("Coal"))
 
         civInfo.tech.addTechnology(game.ruleset.tileResources["Coal"]!!.revealedBy!!)
 
-        assertEquals(civInfo.getCivResourcesByName()["Coal"], 1)
+        assertEquals(2, resourceIncome("Coal"))
     }
 
 
@@ -96,10 +100,10 @@ class ResourceTests {
 
         civInfo.tech.addTechnology(game.ruleset.tileImprovements["Mine"]!!.techRequired!!)
         civInfo.tech.addTechnology(game.ruleset.tileResources["Coal"]!!.revealedBy!!)
-        assertEquals(civInfo.getCivResourcesByName()["Coal"], 1)
+        assertEquals(2, resourceIncome("Coal"))
 
         tile.setPillaged()
-        assertEquals(civInfo.getCivResourcesByName()["Coal"], 0)
+        assertEquals(0, resourceIncome("Coal"))
     }
 
     @Test
@@ -108,8 +112,8 @@ class ResourceTests {
         val tile = game.tileMap[1,1]
         val improvement = game.createTileImprovement("Provides [1] [Coal]", "Consumes [1] [Silver]")
         tile.setImprovement(improvement, civInfo)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == 1)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Silver"] == -1)
+        Assert.assertEquals(1, resourceIncome("Coal"))
+        Assert.assertEquals(-1, resourceIncome("Silver"))
     }
 
     @Test
@@ -118,19 +122,19 @@ class ResourceTests {
         val tile = game.tileMap[1,1]
         val improvement = game.createTileImprovement("Provides [1] [Coal]")
         tile.setImprovement(improvement, civInfo)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == 1)
+        Assert.assertEquals(1, resourceIncome("Coal"))
 
         val doubleCoal = game.createBuilding("[+100]% [Coal] resource production")
         city.cityConstructions.addBuilding(doubleCoal)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == 2)
+        Assert.assertEquals(2, resourceIncome("Coal"))
 
         val doubleStrategic = game.createBuilding("[+100]% [Strategic] resource production")
         city.cityConstructions.addBuilding(doubleStrategic)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == 3)
+        Assert.assertEquals(3, resourceIncome("Coal"))
 
         val doubleStrategicProduction = game.createBuilding("[+100]% [Strategic] resource production")
         city.cityConstructions.addBuilding(doubleStrategicProduction)
-        Assert.assertTrue(civInfo.getCivResourcesByName()["Coal"] == 4)
+        Assert.assertEquals(4, resourceIncome("Coal"))
     }
     
     @Test
@@ -156,7 +160,7 @@ class ResourceTests {
 
         // then
         assertEquals(1, cityResources.size)
-        assertEquals("4 Iron from Tiles", cityResources[0].toString())
+        assertEquals("2 Iron from Tiles", cityResources[0].toString())
     }
 
     @Test
@@ -178,7 +182,7 @@ class ResourceTests {
         city.cityConstructions.addBuilding("Monument")
         val building = game.createBuilding("[300]% of [Culture] from every [Monument] in the city added to [Iron]")
         city.cityConstructions.addBuilding(building)
-        assertEquals(6, city.getAvailableResourceAmount("Iron")) // 2 Culture * 3
+        assertEquals(6, resourceIncome("Iron")) // 2 Culture * 3
     }
 
     @Test
@@ -190,7 +194,7 @@ class ResourceTests {
         city.population.addPopulation(5) // Add population, since the tile needs to be worked
         val building = game.createBuilding("[300]% of [Food] from every [Farm] in the city added to [Iron]")
         city.cityConstructions.addBuilding(building)
-        assertEquals(3, city.getAvailableResourceAmount("Iron"))
+        assertEquals(3, resourceIncome("Iron"))
     }
 
     @Test
@@ -215,6 +219,7 @@ class ResourceTests {
         val otherCity = civInfo.addCity(HexCoord(2,2))
 
         // when
+        TurnManager(civInfo).startTurn()
         val resourceAmountInOtherCity = otherCity.getAvailableResourceAmount("Coal")
 
         // then
@@ -264,6 +269,7 @@ class ResourceTests {
         val otherCity = civInfo.addCity(HexCoord(2,2)) // NOT religionized
 
         // when
+        TurnManager(civInfo).startTurn()
         val resourceAmountInCapital = city.getAvailableResourceAmount("Iron")
         val resourceAmountInOtherCity = otherCity.getAvailableResourceAmount("Iron")
 

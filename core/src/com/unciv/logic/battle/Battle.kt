@@ -64,7 +64,7 @@ object Battle {
          * This can lead to:
          * A. the melee unit from trying to capture their own unit (see #7282)
          * B. The civilian unit disappearing entirely (e.g. Great Person) and trying to capture a non-existent unit (see #8563) */
-        val combatant = getMapCombatantOfTile(attackableTile.tileToAttack)
+        val combatant = getMapCombatantOfTile(attackableTile.tileToAttack, attacker)
         if (combatant == null || combatant.getCivInfo() == attacker.getCivInfo()) return false
         /** Alternatively, maybe we DID reach that tile, but it turned out to be a hill or something,
          * so we expended all of our movement points! */
@@ -99,7 +99,7 @@ object Battle {
             Nuke.NUKE(attacker, attackableTile.tileToAttack)
             DamageDealt.None
         } else {
-            attack(attacker, getMapCombatantOfTile(attackableTile.tileToAttack)!!)
+            attack(attacker, getMapCombatantOfTile(attackableTile.tileToAttack, attacker)!!)
         }
     }
 
@@ -759,9 +759,17 @@ object Battle {
     }
     
     @Readonly
-    fun getMapCombatantOfTile(tile: Tile): ICombatant? {
+    fun getMapCombatantOfTile(tile: Tile, attacker: ICombatant? = null): ICombatant? {
         if (tile.isCityCenter()) return CityCombatant(tile.getCity()!!)
-        if (tile.militaryUnit != null) return MapUnitCombatant(tile.militaryUnit!!)
+        val militaryUnits = tile.getMilitaryUnits().toList()
+        if (militaryUnits.isNotEmpty()) {
+            val frontUnit = if (attacker == null) militaryUnits.maxByOrNull {
+                MapUnitCombatant(it).getDefendingStrength(null)
+            } else militaryUnits.maxByOrNull {
+                BattleDamage.getDefendingStrength(attacker, MapUnitCombatant(it), attacker.getTile())
+            }
+            return MapUnitCombatant(frontUnit!!)
+        }
         if (tile.civilianUnit != null) return MapUnitCombatant(tile.civilianUnit!!)
         return null
     }

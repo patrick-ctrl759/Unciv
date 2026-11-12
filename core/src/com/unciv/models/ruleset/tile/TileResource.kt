@@ -45,7 +45,10 @@ class TileResource : RulesetStatsObject(), GameResource {
 
     val isCityWide by lazy { hasUnique(UniqueType.CityResource, GameContext.IgnoreConditionals) }
 
-    val isStockpiled by lazy { hasUnique(UniqueType.Stockpiled, GameContext.IgnoreConditionals) }
+    /** All non-city-wide map resources are accumulated in a stockpile. */
+    val isStockpiled by lazy {
+        hasUnique(UniqueType.Stockpiled, GameContext.IgnoreConditionals) || !isCityWide
+    }
 
     /** Cache collecting [improvement], [improvedBy] and [UniqueType.ImprovesResources] uniques on the improvements themselves. */
     @Cache private var allImprovements: Set<String>? = null

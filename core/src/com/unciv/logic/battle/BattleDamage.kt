@@ -47,9 +47,16 @@ object BattleDamage {
             val unitUniqueModifiers = getUnitUniqueModifiers(combatant, enemy, conditionalState, tileToAttackFrom)
             modifiers.add(unitUniqueModifiers)
 
-            val civResources = civInfo.getCivResourcesByName()
-            for (resource in combatant.unit.getResourceRequirementsPerTurn().keys)
-                if (civResources[resource]!! < 0 && !civInfo.isBarbarian)
+            if (combatant.unit.isMilitary()) {
+                val alliedStackSize = combatant.unit.getTile().getMilitaryUnits()
+                    .count { it.civ == civInfo && it != combatant.unit }
+                    .coerceAtMost(2)
+                if (alliedStackSize > 0)
+                    modifiers["Formation support"] = alliedStackSize * 10
+            }
+
+            for ((resource, requiredAmount) in combatant.unit.getResourceRequirementsPerTurn())
+                if (civInfo.getResourceAmount(resource) < requiredAmount && !civInfo.isBarbarian)
                     modifiers["Missing resource"] = BattleConstants.MISSING_RESOURCES_MALUS
 
             val (greatGeneralName, greatGeneralBonus) = GreatGeneralImplementation.getGreatGeneralBonus(combatant, enemy, combatAction)

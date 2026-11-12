@@ -43,9 +43,12 @@ object TileDescription {
         val resource = tileView.getViewableResource(viewingCiv)
         if (resource != null)
             lineList += if (resource.resourceType == ResourceType.Strategic)
-                FormattedLine("{${tileView.resource}} (${tileView.resourceAmount})", link = "Resource/${tileView.resource}")
+                FormattedLine("{${tileView.resource}}", link = "Resource/${tileView.resource}")
             else
                 FormattedLine(resource.name, link = "Resource/${resource.name}")
+
+        if (resource != null)
+            lineList += FormattedLine("Resource reserve: ${tileView.resourceReserve}")
 
         if (viewingCiv != null && resource != null)
             addNeedsResearchLine(lineList, tileView, viewingCiv, resource)

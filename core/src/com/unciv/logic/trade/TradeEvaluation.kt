@@ -12,6 +12,8 @@ import com.unciv.logic.civilization.diplomacy.DiplomaticModifiers
 import com.unciv.logic.civilization.diplomacy.RelationshipLevel
 import com.unciv.logic.map.tile.Tile
 import com.unciv.models.ruleset.Ruleset
+import com.unciv.models.ruleset.tile.ResourceType
+import com.unciv.models.ruleset.tile.TileResource
 import com.unciv.models.ruleset.unique.GameContext
 import com.unciv.models.ruleset.unique.UniqueType
 import com.unciv.ui.screens.victoryscreen.RankingType
@@ -61,7 +63,44 @@ class TradeEvaluation {
             if (!isOfferValid(offer, tradePartner, offerer)) {
                 return false
             }
+
+        fun requiredResourceTribute(offers: Iterable<TradeOffer>, exporter: Civilization): Long =
+            offers.filter { it.type == TradeOfferType.Stockpiled_Resource_Per_Turn }
+                .sumOf {
+                    val resource = exporter.gameInfo.ruleset.tileResources[it.name] ?: return@sumOf 0
+                    getResourceTributePerTurn(resource, it.amount, exporter).toLong()
+                }
+
+        if (requiredResourceTribute(trade.ourOffers, offerer)
+                > trade.theirOffers.filter { it.type == TradeOfferType.Gold_Per_Turn }.sumOf { it.amount.toLong() }
+            || requiredResourceTribute(trade.theirOffers, tradePartner)
+                > trade.ourOffers.filter { it.type == TradeOfferType.Gold_Per_Turn }.sumOf { it.amount.toLong() })
+            return false
+
         return true
+    }
+
+    /**
+     * Continuous resource exports are taxed by resource class and map scarcity.
+     * The rate is in gold per turn and applies independently to each exported unit.
+     */
+    @Readonly
+    fun getResourceTributePerTurn(resource: TileResource, amount: Int, exporter: Civilization): Int {
+        val resourceNames = exporter.gameInfo.tileMap.values.mapNotNull { it.tileResource?.name }.distinct()
+        val resourceCounts = resourceNames.map { name ->
+            exporter.gameInfo.tileMap.values.count { it.tileResource?.name == name }
+        }.sorted()
+        val medianCount = resourceCounts.getOrNull(resourceCounts.size / 2) ?: 1
+        val tileCount = exporter.gameInfo.tileMap.values.count { it.tileResource?.name == resource.name }
+        val scarcityMultiplier = if (tileCount == 0) 1
+            else ceil(medianCount.toDouble() / tileCount).toInt().coerceIn(1, 3)
+        val typeRate = when (resource.resourceType) {
+            ResourceType.Bonus -> 1
+            ResourceType.Strategic -> 3
+            ResourceType.Luxury -> 4
+        }
+        return (typeRate.toLong() * scarcityMultiplier * amount.coerceAtLeast(0))
+            .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 
     @Readonly
@@ -92,6 +131,21 @@ class TradeEvaluation {
             TradeOfferType.Luxury_Resource -> hasResource(tradeOffer)
             TradeOfferType.Strategic_Resource -> hasResource(tradeOffer)
             TradeOfferType.Stockpiled_Resource -> hasResource(tradeOffer)
+            TradeOfferType.Stockpiled_Resource_Per_Turn -> {
+                val resource = offerer.gameInfo.ruleset.tileResources[tradeOffer.name] ?: return false
+                if (!resource.isStockpiled || resource.isCityWide) return false
+                val production = offerer.getCivResourceSupply()
+                    .firstOrNull { it.resource == resource }?.amount ?: 0
+                val alreadyExported = offerer.diplomacy.values.sumOf { diplomacyManager ->
+                    diplomacyManager.trades.sumOf { trade ->
+                        trade.ourOffers.filter {
+                            it.type == TradeOfferType.Stockpiled_Resource_Per_Turn && it.name == resource.name
+                        }.sumOf { it.amount.toLong() }
+                    }
+                }
+                tradeOffer.amount > 0 && tradeOffer.duration > 0
+                    && production.toLong() - alreadyExported >= tradeOffer.amount
+            }
             TradeOfferType.Technology -> true
             TradeOfferType.Introduction -> !tradePartner.knows(tradeOffer.name) // You can't introduce them to someone they already know!
             TradeOfferType.WarDeclaration -> offerer.getDiplomacyManager(tradeOffer.name)!!.canDeclareWar()
@@ -227,7 +281,26 @@ class TradeEvaluation {
                 val resource = civInfo.gameInfo.ruleset.tileResources[offer.name] ?: return 0
                 val lowestBuyCost = resource.getMatchingUniques(UniqueType.AiWillBuyAt, GameContext(civInfo))
                     .minOfOrNull { it.params[0].toInt() }
-                return lowestBuyCost ?: 0
+                if (lowestBuyCost != null) return lowestBuyCost
+                return when (resource.resourceType) {
+                    ResourceType.Luxury ->
+                        if (!civInfo.hasResource(resource)) {
+                            when {
+                                civInfo.getHappiness() < 0 -> 450
+                                civInfo.getHappiness() < 10 -> 350
+                                else -> 300
+                            }
+
+                        } else 30 * offer.amount
+                    ResourceType.Strategic ->
+                        50 * min(offer.amount, (5 - civInfo.getResourceAmount(resource)).coerceAtLeast(0))
+                    ResourceType.Bonus -> 10 * offer.amount
+                }
+            }
+            TradeOfferType.Stockpiled_Resource_Per_Turn -> {
+                val resource = civInfo.gameInfo.ruleset.tileResources[offer.name] ?: return 0
+                return getResourceTributePerTurn(resource, offer.amount, tradePartner) *
+                    offer.duration.coerceAtLeast(1) * 4 / 5
             }
 
             TradeOfferType.Technology -> // Currently unused
@@ -440,11 +513,22 @@ class TradeEvaluation {
                 }
                 return totalCost
             }
+            TradeOfferType.Stockpiled_Resource_Per_Turn -> {
+                val resource = civInfo.gameInfo.ruleset.tileResources[offer.name] ?: return 0
+                return getResourceTributePerTurn(resource, offer.amount, civInfo) *
+                    offer.duration.coerceAtLeast(1) * 4 / 5
+            }
             TradeOfferType.Stockpiled_Resource -> {
                 val resource = civInfo.gameInfo.ruleset.tileResources[offer.name] ?: return 0
                 val lowestSellCost = resource.getMatchingUniques(UniqueType.AiWillSellAt, GameContext(civInfo))
                     .minOfOrNull { it.params[0].toInt() }
-                return lowestSellCost ?: Int.MAX_VALUE
+                if (lowestSellCost != null) return lowestSellCost
+                return when (resource.resourceType) {
+                    ResourceType.Luxury ->
+                        if (civInfo.getResourceAmount(resource) > offer.amount) 30 * offer.amount else 600
+                    ResourceType.Strategic -> 50 * offer.amount
+                    ResourceType.Bonus -> 10 * offer.amount
+                }
             }
             TradeOfferType.Technology -> return sqrt(civInfo.gameInfo.ruleset.technologies[offer.name]!!.cost.toDouble()).toInt() * 20
             TradeOfferType.Introduction -> return introductionValue(civInfo.gameInfo.ruleset)

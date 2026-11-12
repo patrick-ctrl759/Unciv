@@ -36,15 +36,34 @@ object DiplomacyTurnManager {
             // don't cancel all trades of that resource, only cancel one (the first one, as it happens, since they're added chronologically)
             val negativeCivResources = civInfo.getCivResourceSupply()
                 .filter { it.amount < 0 && !it.resource.isStockpiled }.map { it.resource.name }
+            val overcommittedStockpiledResources = civInfo.gameInfo.ruleset.tileResources.values
+                .filter { it.isStockpiled }
+                .filter { resource ->
+                    val production = civInfo.getCivResourceSupply()
+                        .firstOrNull { it.resource == resource }?.amount ?: 0
+                    val committed = civInfo.diplomacy.values.sumOf { manager ->
+                        manager.trades.sumOf { activeTrade ->
+                            activeTrade.ourOffers.filter {
+                                it.type == TradeOfferType.Stockpiled_Resource_Per_Turn && it.name == resource.name
+                            }.sumOf { it.amount.toLong() }
+                        }
+                    }
+                    production < committed
+                }
+                .map { it.name }
 
             for (offer in trade.ourOffers) {
-                if (offer.type in listOf(TradeOfferType.Luxury_Resource, TradeOfferType.Strategic_Resource)
-                    && (offer.name in negativeCivResources || !civInfo.gameInfo.ruleset.tileResources.containsKey(offer.name))
+                if ((offer.type in listOf(TradeOfferType.Luxury_Resource, TradeOfferType.Strategic_Resource)
+                    && (offer.name in negativeCivResources || !civInfo.gameInfo.ruleset.tileResources.containsKey(offer.name)))
+                    || (offer.type == TradeOfferType.Stockpiled_Resource_Per_Turn
+                        && offer.name in overcommittedStockpiledResources)
                 ) {
 
                     trades.remove(trade)
                     val otherCivTrades = otherCiv.getDiplomacyManager(civInfo)!!.trades
                     otherCivTrades.removeAll { it.equalTrade(trade.reverse()) }
+                    civInfo.updateStatsForNextTurn()
+                    otherCiv.updateStatsForNextTurn()
 
                     // Can't cut short peace treaties!
                     if (trade.theirOffers.any { it.name == Constants.peaceTreaty }) {

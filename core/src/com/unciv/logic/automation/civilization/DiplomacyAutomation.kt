@@ -43,6 +43,7 @@ object DiplomacyAutomation {
             }
             .sortedByDescending { it.getDiplomacyManager(civInfo)!!.relationshipLevel() }.toList()
         for (otherCiv in civsThatWeCanDeclareFriendshipWith) {
+            if (!hasStrategicFriendshipInterest(civInfo, otherCiv, civView)) continue
             val rng = civInfo.getDiplomacyManager(otherCiv)!!.state.stateBasedRandom("DiplomacyAutomation.offerDeclarationOfFriendship")
             // Default setting is 2, this will be changed according to different civ.
             if ((1..10).random(rng)
@@ -51,6 +52,27 @@ object DiplomacyAutomation {
                 otherCiv.popupAlerts.add(PopupAlert(AlertType.DeclarationOfFriendship, civView.civID))
             }
         }
+
+    }
+
+    @Readonly
+    private fun hasStrategicFriendshipInterest(civInfo: Civilization, otherCiv: Civilization, civView: CivView): Boolean {
+        val diplomacyManager = civInfo.getDiplomacyManager(otherCiv)!!
+        val hasActiveTrade = diplomacyManager.trades.any { trade ->
+            trade.ourOffers.any { it.type != TradeOfferType.Treaty && it.type != TradeOfferType.Agreement }
+                || trade.theirOffers.any { it.type != TradeOfferType.Treaty && it.type != TradeOfferType.Agreement }
+        }
+        if (hasActiveTrade) return true
+
+        val commonEnemy = civInfo.getCivsAtWarWith().any { enemy ->
+            enemy.isMajorCiv && otherCiv.isAtWarWith(enemy)
+        }
+        if (commonEnemy) return true
+
+        val isNeighbor = ThreatManager.getNeighboringCivilizations(civView).any { it.getCiv() == otherCiv }
+        val ourForce = civInfo.getStatForRanking(RankingType.Force).coerceAtLeast(1)
+        val otherForce = otherCiv.getStatForRanking(RankingType.Force)
+        return isNeighbor && otherForce >= ourForce * 1.5f
     }
     
     @Readonly

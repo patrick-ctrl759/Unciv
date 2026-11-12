@@ -204,14 +204,13 @@ object CityResources {
     @Readonly
     private fun getTileResourceAmount(city: City, tile: Tile): Int {
         val resource = tile.tileResource ?: return 0
+        if (tile.getOwner() != city.civ) return 0
         if (!tile.providesResources(city.civ)) return 0
 
-        var amountToAdd = if (resource.resourceType == ResourceType.Strategic) tile.resourceAmount
-        else 1
+        var amount = minOf(Tile.ResourceExtractionPerTurn, tile.resourceReserve)
         if (resource.resourceType == ResourceType.Luxury
             && city.containsBuildingUnique(UniqueType.ProvidesExtraLuxuryFromCityResources))
-            amountToAdd += 1
-
-        return amountToAdd
+            amount += 1
+        return amount
     }
 }

@@ -18,6 +18,7 @@ import com.unciv.logic.map.tile.Tile
 import com.unciv.models.ruleset.Building
 import com.unciv.models.ruleset.nation.PersonalityValue
 import com.unciv.models.ruleset.unique.UniqueType
+import com.unciv.models.ruleset.tile.ResourceType
 import com.unciv.models.ruleset.unit.BaseUnit
 import com.unciv.ui.screens.victoryscreen.RankingType
 import yairm210.purity.annotations.Readonly
@@ -31,6 +32,7 @@ object MotivationToAttackAutomation {
     fun hasAtLeastMotivationToAttack(civInfo: Civilization, targetCivView: ForeignCivView, atLeast: Float): Float {
         val targetCiv = targetCivView.getCiv()
         val diplomacyManager = civInfo.getDiplomacyManager(targetCiv)!!
+        if (diplomacyManager.trades.any { it.isUltimatum }) return -100f
         val personality = civInfo.getPersonality()
 
         val civView = GameView(civInfo.gameInfo, civInfo).civView
@@ -48,6 +50,18 @@ object MotivationToAttackAutomation {
 
         val ourCombatStrength = calculateSelfCombatStrength(civInfo, baseForce)
         val theirCombatStrength = calculateCombatStrengthWithProtectors(targetCiv, baseForce, civInfo)
+        val possibleAllyForce = if (targetCiv.isMajorCiv) {
+            diplomacyManager.getCommonKnownCivs()
+                .filter {
+                    it.isMajorCiv && it != civInfo && !it.isAtWarWith(targetCiv)
+                        && !civInfo.getDiplomacyManager(it)!!.hasFlag(DiplomacyFlags.DeclinedJoinWarOffer)
+                        && civInfo.getDiplomacyManager(it)!!.isRelationshipLevelGE(RelationshipLevel.Neutral)
+                }
+                .maxOfOrNull { it.getStatForRanking(RankingType.Force) }
+                ?: 0
+        } else 0
+        if (ourCombatStrength + possibleAllyForce <= theirCombatStrength * 1.1f)
+            return -100f
 
         val modifiers: MutableList<Pair<String, Float>> = mutableListOf()
 
@@ -87,7 +101,23 @@ object MotivationToAttackAutomation {
 
         // Defensive civs want to deal with potential nearby cities to protect themselves
         if (minTargetCityDistance < 6)
-            modifiers.add(Pair("Close cities", 5f * personality.inverseScaledFocus(PersonalityValue.Aggressive)))
+            modifiers.add(Pair("Close cities", 8f * personality.inverseScaledFocus(PersonalityValue.Aggressive)))
+
+        val targetResources = targetCiv.cities.asSequence().flatMap { it.getTiles() }
+            .filter { it.tileResource != null && it.resourceReserve > 0 }
+            .toList()
+        val resourceReserveValue = targetResources.fold(0f) { totalValue, tile ->
+            val resourceValue = when (tile.tileResource!!.resourceType) {
+                ResourceType.Strategic -> 3f
+                ResourceType.Luxury -> 2f
+                ResourceType.Bonus -> 0.5f
+            }
+            totalValue + tile.resourceReserve.toFloat() / Tile.InitialResourceReserve * resourceValue
+        }
+        if (resourceReserveValue > 0)
+            modifiers.add(Pair("Valuable resource reserves", minOf(15f, resourceReserveValue * 2f)))
+        if (targetCiv.cities.size > civInfo.cities.size)
+            modifiers.add(Pair("Larger neighboring territory", minOf(8, targetCiv.cities.size - civInfo.cities.size).toFloat()))
 
         if (diplomacyManager.hasFlag(DiplomacyFlags.ResearchAgreement))
             modifiers.add(Pair("Research Agreement", -5f * personality.scaledFocus(PersonalityValue.Science) * personality.scaledFocus(PersonalityValue.Commerce)))
@@ -161,7 +191,16 @@ object MotivationToAttackAutomation {
 
     @Readonly
     private fun calculateSelfCombatStrength(civInfo: Civilization, baseForce: Float): Float {
-        var ourCombatStrength = civInfo.getStatForRanking(RankingType.Force).toFloat() + baseForce
+        val formationSupportBonus = civInfo.units.getCivUnits()
+            .filter { it.isMilitary() }
+            .groupBy { it.currentTile }
+            .values
+            .filter { it.size > 1 }
+            .sumOf { stackedUnits ->
+                val supportingUnits = (stackedUnits.size - 1).coerceAtMost(2)
+                stackedUnits.sumOf { it.getForceEvaluation() * supportingUnits * 0.1 }
+            }
+        var ourCombatStrength = civInfo.getStatForRanking(RankingType.Force).toFloat() + formationSupportBonus.toFloat() + baseForce
         if (civInfo.getCapital() != null) ourCombatStrength += CityCombatant(civInfo.getCapital()!!).getCityStrength()
         return ourCombatStrength
     }

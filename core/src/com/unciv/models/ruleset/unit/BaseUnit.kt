@@ -381,7 +381,10 @@ class BaseUnit : RulesetObject(), INonPerpetualConstruction {
             ?: return null  // couldn't place the unit, so there's actually no unit =(
 
         //movement penalty
-        if (boughtWith != null && !civInfo.gameInfo.gameParameters.godMode && !unit.hasUnique(UniqueType.CanMoveImmediatelyOnceBought))
+        val instantMilitaryRecruitment = boughtWith == Stat.Gold && isMilitary
+        if (instantMilitaryRecruitment)
+            unit.currentMovement = unit.getMaxMovement().toFloat()
+        else if (boughtWith != null && !civInfo.gameInfo.gameParameters.godMode && !unit.hasUnique(UniqueType.CanMoveImmediatelyOnceBought))
             unit.currentMovement = 0f
 
         addConstructionBonuses(unit, cityConstructions)

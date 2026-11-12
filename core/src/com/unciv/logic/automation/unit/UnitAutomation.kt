@@ -488,7 +488,10 @@ object UnitAutomation {
             .filter { unit.getDamageFromTerrain(it.tileToAttackFrom) <= 0 }  // Don't attack from a mountain or near enemy citadels
             .filter {
             // Ignore units that would 1-shot you if you attacked
-            BattleDamage.calculateDamageToAttacker(MapUnitCombatant(unit), Battle.getMapCombatantOfTile(it.tileToAttack)!!) < unitView.unitHealth }
+            BattleDamage.calculateDamageToAttacker(
+                MapUnitCombatant(unit),
+                Battle.getMapCombatantOfTile(it.tileToAttack, MapUnitCombatant(unit))!!
+            ) < unitView.unitHealth }
             .minByOrNull { it.tileToAttack.aerialDistanceTo(unit.getTile()) }
 
         if (closeEnemy != null) {

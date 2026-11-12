@@ -48,6 +48,8 @@ class TradePopup(worldScreen: WorldScreen) : Popup(worldScreen) {
         val leaderIntroTable = LeaderIntroTable(requestingCiv)
         add(leaderIntroTable)
         addSeparator()
+        if (trade.isUltimatum)
+            addGoodSizedLabel("This is an ultimatum. Refusing it will mean war.").row()
 
         val tradeOffersTable = Table().apply { defaults().pad(10f) }
         tradeOffersTable.add("[${nation.name}]'s trade offer".toLabel())
@@ -60,7 +62,9 @@ class TradePopup(worldScreen: WorldScreen) : Popup(worldScreen) {
         @Readonly
         fun getOfferText(offer:TradeOffer): String {
             var tradeText = offer.getOfferText()
-            if (offer.type == TradeOfferType.Luxury_Resource || offer.type == TradeOfferType.Strategic_Resource)
+            if (offer.type == TradeOfferType.Luxury_Resource
+                || offer.type == TradeOfferType.Strategic_Resource
+                || offer.type == TradeOfferType.Stockpiled_Resource_Per_Turn)
                 tradeText += "\n" + "Owned by you: [${ourResources[offer.name]}]".tr()
             return tradeText
         }
@@ -84,7 +88,7 @@ class TradePopup(worldScreen: WorldScreen) : Popup(worldScreen) {
         UncivGame.Current.musicController.playVoice("${requestingCiv.civName}.tradeRequest")
         addGoodSizedLabel(nation.tradeRequest).pad(15f).row()
 
-        addButton("Sounds good!", 'y') {
+        addButton(if (trade.isUltimatum) "Accept the ultimatum" else "Sounds good!", 'y') {
             val tradeLogic = TradeLogic(viewingCiv, requestingCiv)
             tradeLogic.currentTrade.set(trade)
             tradeLogic.acceptTrade()
@@ -93,7 +97,7 @@ class TradePopup(worldScreen: WorldScreen) : Popup(worldScreen) {
             requestingCiv.addNotification("[${viewingCiv.civName}] has accepted your trade request", NotificationCategory.Trade, viewingCiv.civName, NotificationIcon.Trade)
         }.row()
 
-        addButton("Not this time.", 'n') {
+        addButton(if (trade.isUltimatum) "Reject it (declare war)" else "Not this time.", 'n') {
             tradeRequest.decline(viewingCiv)
             close()
             requestingCiv.addNotification("[${viewingCiv.civName}] has denied your trade request", NotificationCategory.Trade, viewingCiv.civName, NotificationIcon.Trade)

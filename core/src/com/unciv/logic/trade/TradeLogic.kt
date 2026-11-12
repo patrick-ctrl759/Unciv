@@ -58,12 +58,28 @@ class TradeLogic(val ourCivilization: Civilization, val otherCivilization: Civil
             offers.add(TradeOffer(Constants.defensivePact, TradeOfferType.Treaty, speed = civInfo.gameInfo.speed))
 
         for (entry in civInfo.getPerTurnResourcesWithOriginsForTrade()
-            .filterNot { it.resource.resourceType == ResourceType.Bonus }
             .filter { it.origin == Constants.tradable }
         ) {
             val resourceTradeOfferType = if (entry.resource.resourceType == ResourceType.Luxury) TradeOfferType.Luxury_Resource
             else TradeOfferType.Strategic_Resource
             offers.add(TradeOffer(entry.resource.name, resourceTradeOfferType, entry.amount, speed = civInfo.gameInfo.speed))
+        }
+
+        for (resource in civInfo.gameInfo.ruleset.tileResources.values) {
+            if (!resource.isStockpiled || resource.isCityWide
+                || resource.hasUnique(UniqueType.CannotBeTraded, civInfo.state)) continue
+            val production = civInfo.getCivResourceSupply().firstOrNull { it.resource == resource }?.amount ?: 0
+            val alreadyExported = civInfo.diplomacy.values.sumOf { diplomacyManager ->
+                diplomacyManager.trades.sumOf { trade ->
+                    trade.ourOffers.filter {
+                        it.type == TradeOfferType.Stockpiled_Resource_Per_Turn && it.name == resource.name
+                    }.sumOf { it.amount.toLong() }
+                }
+            }
+            val availableProduction = (production.toLong() - alreadyExported).coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
+            if (availableProduction > 0)
+                offers.add(TradeOffer(resource.name, TradeOfferType.Stockpiled_Resource_Per_Turn,
+                    availableProduction, speed = civInfo.gameInfo.speed))
         }
         
         for (entry in civInfo.getStockpiledResourcesForTrade()){
@@ -142,6 +158,7 @@ class TradeLogic(val ourCivilization: Civilization, val otherCivilization: Civil
                     to.gainStockpiledResource(resource, offer.amount)
                     from.gainStockpiledResource(resource, -offer.amount)
                 }
+                TradeOfferType.Stockpiled_Resource_Per_Turn -> {}
                 TradeOfferType.Technology -> {
                     to.tech.addTechnology(offer.name)
                 }
