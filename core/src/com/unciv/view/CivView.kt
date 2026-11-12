@@ -56,8 +56,8 @@ class CivView(civ: Civilization,
 
     @Readonly fun getCivResourcesByName(): HashMap<String, Int> = civ.getCivResourcesByName()
     @Readonly fun isSpectator(): Boolean = civ.isSpectator
-    /** `true` when this civ is a human player defeated in a singleplayer game - the map is fully revealed for them to watch the game play out. */
-    @Readonly fun isMapRevealed(): Boolean = !civ.gameInfo.gameParameters.isOnlineMultiplayer && civ.isCurrentPlayer() && civ.isDefeated()
+    /** `true` when this human player has a fully revealed map. */
+    @Readonly fun isMapRevealed(): Boolean = civ.isHuman() && civ.isCurrentPlayer()
     @Readonly fun hasExplored(tileView: TileView): Boolean = civ.hasExplored(tileView.unwrap())
     @Readonly fun isCurrentPlayer(): Boolean = civ.isCurrentPlayer()
     @Readonly fun isHuman(): Boolean = civ.isHuman()

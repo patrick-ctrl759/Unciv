@@ -16,6 +16,7 @@ import com.unciv.models.metadata.GameSetupInfo
 import com.unciv.models.metadata.Player
 import com.unciv.models.ruleset.RulesetCache
 import com.unciv.models.ruleset.unique.UniqueType
+import com.unciv.view.GameView
 import com.unciv.testing.BaseTestRunner
 import com.unciv.utils.debug
 import org.junit.After
@@ -91,6 +92,15 @@ class GameSerializationTests {
 
         // Ensure a barbarian encampment is included
         game.barbarians.placeBarbarianEncampment(forTesting = true)
+    }
+
+    @Test
+    fun newGameStartsWithTheMapExploredAndVisibleToThePlayer() {
+        val civ = game.getCurrentPlayerCivilization()
+        val gameView = GameView(game, civ)
+
+        Assert.assertTrue(game.tileMap.values.all { it.isExplored(civ) })
+        Assert.assertTrue(game.tileMap.values.all { gameView.tileMapView.getTile(it).isForceVisible() })
     }
 
     @Test

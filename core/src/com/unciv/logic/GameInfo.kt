@@ -835,6 +835,9 @@ class GameInfo : IsPartOfGameInfoSerialization, HasGameInfoSerializationVersion 
             if (civInfo.playerType == PlayerType.Human)
                 civInfo.exploredRegion.setMapParameters(tileMap.mapParameters) // Required for the correct calculation of the explored region on world wrap maps
 
+            if (civInfo.isHuman())
+                for (tile in tileMap.values) tile.setExplored(civInfo, true)
+
             civInfo.cache.updateOurTiles()
             civInfo.cache.updateSightAndResources() // only run ONCE and not for each unit - this is a huge performance saver!
 

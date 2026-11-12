@@ -107,7 +107,7 @@ class TileView internal constructor(private val tile: Tile, val tileMapView: Til
     /** Actively observed by [viewer] (no fog of war) */
     @Readonly fun isVisible(): Boolean = viewer == null || tile.isVisible(viewer)
     /** `true` when this tile should be shown regardless of exploration/tech: there's no real [viewer] (e.g. civilopedia/map editor previews),
-     * debug mode has the whole map revealed, or [getCivView] is watching a defeated game play out.
+     * debug mode has the whole map revealed, or [getCivView] belongs to the current human player.
      * TODO: Replace all usages with altering the view function called, to reveal data where relevant */
     @Readonly fun isForceVisible(): Boolean = viewer == null || DebugUtils.VISIBLE_MAP || getCivView()?.isMapRevealed() == true
     /** Neighbors the viewer has explored */
